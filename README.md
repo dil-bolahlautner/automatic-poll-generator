@@ -24,6 +24,7 @@ Create a `.env` file in the root directory with the following variables:
 JIRA_HOST=diligentbrands.atlassian.net
 JIRA_USERNAME=bolahlautner@diligent.com
 JIRA_API_TOKEN=your-jira-api-token
+JIRA_BOARD_ID=123
 
 # Confluence Configuration
 CONFLUENCE_USERNAME=your-email@example.com
@@ -34,6 +35,8 @@ TEAMS_TENANT_ID=your-tenant-id
 TEAMS_CLIENT_ID=your-client-id
 TEAMS_CLIENT_SECRET=your-client-secret
 ```
+
+Find backend/src/config/jira.ts and change the JQL string there. (later will be refactored to use the .env file for that setting too)
 
 ## Installation
 
