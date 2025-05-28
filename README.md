@@ -1,5 +1,4 @@
-# Automatic Poll Generator
-
+# Automatic Jira Tool (previously Poll Generator)
 A web application for managing JIRA tickets, generating PBR planning pages, and creating Teams meeting polls.
 
 ## Features
