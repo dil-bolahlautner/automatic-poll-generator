@@ -2,11 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+// import { Server } from 'socket.io'; // Will be handled by WebSocketService
 import { jiraRouter } from './routes/jira';
 import confluenceRoutes from './routes/confluence';
 import { teamsRouter } from './routes/teams';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid'; // Likely not needed here anymore if old WS logic is removed
+
+// Import new services
+import WebSocketService from './services/websocketService';
+import { planningPokerService } from './services/planningPokerService';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -28,16 +32,24 @@ app.use('/api/jira', jiraRouter);
 app.use('/api/confluence', confluenceRoutes);
 app.use('/api/teams', teamsRouter);
 
+// Initialize and wire up Planning Poker services
+const wsService = new WebSocketService(httpServer, planningPokerService);
+planningPokerService.setWebSocketService(wsService);
+
+console.log('New Planning Poker WebSocketService initialized.');
+
+// --- OLD WebSocket Logic (Commented out as new system should replace it for Planning Poker) ---
+/*
 // Create Socket.IO server
 const io = new Server(httpServer, {
   cors: {
     origin: "http://localhost:3000",
     methods: ["GET", "POST"]
   },
-  path: '/ws/estimation'
+  path: '/ws/estimation' // This path might be for the old system
 });
 
-console.log('WebSocket server initialized with path:', '/ws/estimation');
+console.log('Old WebSocket server initialized with path:', '/ws/estimation');
 
 // Store connected users and events
 const connectedUsers = new Map<string, { name: string; isHost: boolean }>();
@@ -68,22 +80,21 @@ const events = new Map<string, {
 }>();
 
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
-  console.log('Auth data:', socket.handshake.auth);
+  console.log('New client connected to OLD WS:', socket.id);
+  console.log('Auth data (OLD WS):', socket.handshake.auth);
   
   let userId: string | null = null;
 
   socket.on('register', (data: { userId: string; name: string; isHost: boolean }, callback) => {
-    console.log('Registration attempt:', data);
+    console.log('OLD WS Registration attempt:', data);
     const { userId: newUserId, name, isHost } = data;
     
-    // Check if name is already taken
     const isNameTaken = Array.from(connectedUsers.values()).some(
       user => user.name.toLowerCase() === name.toLowerCase()
     );
 
     if (isNameTaken) {
-      console.log('Registration failed: Name taken');
+      console.log('OLD WS Registration failed: Name taken');
       socket.emit('REGISTRATION_ERROR', {
         type: 'REGISTRATION_ERROR',
         payload: {
@@ -94,31 +105,26 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Register the user
     userId = newUserId;
     if (userId) {
-      console.log('User registered successfully:', { userId, name, isHost });
+      console.log('OLD WS User registered successfully:', { userId, name, isHost });
       connectedUsers.set(userId, { name, isHost });
       socket.data = { userId, name, isHost };
       callback({ success: true });
     } else {
-      console.log('Registration failed: Invalid user ID');
+      console.log('OLD WS Registration failed: Invalid user ID');
       callback({ error: 'Failed to register user' });
     }
   });
 
   socket.on('create_event', (data: { name: string; hostId: string }) => {
-    console.log('Received create_event request:', data);
-    console.log('Current socket data:', socket.data);
-    
+    console.log('OLD WS Received create_event request:', data);
     if (!userId || !socket.data) {
-      console.error('Create event failed: No user ID or socket data');
+      console.error('OLD WS Create event failed: No user ID or socket data');
       return;
     }
 
     const eventId = uuidv4();
-    console.log('Generated event ID:', eventId);
-    
     const event = {
       id: eventId,
       name: data.name,
@@ -134,29 +140,19 @@ io.on('connection', (socket) => {
       }]
     };
 
-    console.log('Creating new event:', event);
     events.set(eventId, event);
     socket.join(eventId);
-    
-    console.log('Emitting EVENT_CREATED');
     socket.emit('EVENT_CREATED', { type: 'EVENT_CREATED', payload: { event, eventId } });
   });
 
   socket.on('join_event', (data: { eventId: string; userId: string }) => {
     if (!userId || !socket.data) return;
-
     const event = events.get(data.eventId);
     if (!event) {
-      socket.emit('error', { message: 'Event not found' });
+      socket.emit('error', { message: 'Event not found (OLD WS)' });
       return;
     }
-
-    const participant = {
-      id: userId,
-      name: socket.data.name,
-      isHost: false
-    };
-
+    const participant = { id: userId, name: socket.data.name, isHost: false };
     event.participants.push(participant);
     socket.join(data.eventId);
     io.to(data.eventId).emit('event_updated', { event });
@@ -165,19 +161,15 @@ io.on('connection', (socket) => {
 
   socket.on('leave_event', (data: { eventId: string; userId: string }) => {
     if (!userId) return;
-
     const event = events.get(data.eventId);
     if (!event) return;
-
     event.participants = event.participants.filter(p => p.id !== userId);
     socket.leave(data.eventId);
-
     if (event.participants.length === 0) {
       events.delete(data.eventId);
     } else {
       io.to(data.eventId).emit('event_updated', { event });
     }
-
     io.to(data.eventId).emit('voter_left', { voterId: userId });
   });
 
@@ -185,14 +177,10 @@ io.on('connection', (socket) => {
     if (!userId) return;
     const event = events.get(data.eventId);
     if (!event || event.hostId !== userId) return;
-
     const ticket = event.tickets.find(t => t.key === data.ticketKey);
     if (ticket) {
       ticket.status = 'voting';
-      io.to(data.eventId).emit('voting_started', {
-        event,
-        ticketKey: data.ticketKey
-      });
+      io.to(data.eventId).emit('voting_started', { event, ticketKey: data.ticketKey });
     }
   });
 
@@ -200,16 +188,10 @@ io.on('connection', (socket) => {
     if (!userId || !socket.data) return;
     const event = events.get(data.eventId);
     if (!event) return;
-
     const ticket = event.tickets.find(t => t.key === data.ticketKey);
     if (ticket && ticket.status === 'voting') {
       ticket.votes[userId] = data.vote;
-      io.to(data.eventId).emit('vote_received', {
-        event,
-        ticketKey: data.ticketKey,
-        userId,
-        vote: data.vote
-      });
+      io.to(data.eventId).emit('vote_received', { event, ticketKey: data.ticketKey, userId, vote: data.vote });
     }
   });
 
@@ -217,33 +199,20 @@ io.on('connection', (socket) => {
     if (!userId) return;
     const event = events.get(data.eventId);
     if (!event || event.hostId !== userId) return;
-
     const ticket = event.tickets.find(t => t.key === data.ticketKey);
     if (ticket && ticket.status === 'voting') {
       ticket.status = 'closed';
-      
-      // Calculate results
       const votes = Object.values(ticket.votes).filter(v => typeof v === 'number') as number[];
       if (votes.length > 0) {
         const average = votes.reduce((a, b) => a + b, 0) / votes.length;
         const sorted = [...votes].sort((a, b) => a - b);
-        const median = sorted.length % 2 === 0
-          ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-          : sorted[Math.floor(sorted.length / 2)];
-        
+        const median = sorted.length % 2 === 0 ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : sorted[Math.floor(sorted.length / 2)];
         const counts = new Map<number, number>();
         votes.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
-        const mode = Array.from(counts.entries())
-          .reduce((a, b) => b[1] > a[1] ? b : a)[0];
-
+        const mode = Array.from(counts.entries()).reduce((a, b) => b[1] > a[1] ? b : a)[0];
         ticket.result = { average, median, mode };
       }
-
-      io.to(data.eventId).emit('voting_closed', {
-        event,
-        ticketKey: data.ticketKey,
-        result: ticket.result
-      });
+      io.to(data.eventId).emit('voting_closed', { event, ticketKey: data.ticketKey, result: ticket.result });
     }
   });
 
@@ -251,23 +220,18 @@ io.on('connection', (socket) => {
     if (!userId) return;
     const event = events.get(data.eventId);
     if (!event || event.hostId !== userId) return;
-
     const ticket = event.tickets.find(t => t.key === data.ticketKey);
     if (ticket) {
       ticket.status = 'voting';
       ticket.votes = {};
       delete ticket.result;
-      io.to(data.eventId).emit('voting_restarted', {
-        event,
-        ticketKey: data.ticketKey
-      });
+      io.to(data.eventId).emit('voting_restarted', { event, ticketKey: data.ticketKey });
     }
   });
 
   socket.on('disconnect', () => {
     if (userId) {
       connectedUsers.delete(userId);
-      // Leave all events the user was part of
       events.forEach((event, eventId) => {
         if (event.participants.some(p => p.id === userId)) {
           event.participants = event.participants.filter(p => p.id !== userId);
@@ -280,11 +244,14 @@ io.on('connection', (socket) => {
         }
       });
     }
+    console.log('Client disconnected from OLD WS:', socket.id);
   });
 });
+*/
+// --- End of OLD WebSocket Logic ---
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001; // Changed port to 3001 to avoid conflict if old server runs on 3000
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 }); 

@@ -87,12 +87,13 @@ export function EventCreation() {
       }
     };
 
-    const unsubscribe = websocketService.subscribe((message) => {
-      handleEventCreated(message);
-      handleError(message);
-    });
-
-    return () => unsubscribe();
+    // const unsubscribe = websocketService.subscribe((message) => {
+    //   handleEventCreated(message);
+    //   handleError(message);
+    // });
+    // return () => unsubscribe();
+    console.warn("EventCreation: Old websocketService.subscribe() call commented out.");
+    return () => {}; // Return an empty function for cleanup
   }, [dispatch]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -109,9 +110,11 @@ export function EventCreation() {
 
     try {
       const userId = crypto.randomUUID();
-      await websocketService.connect(userId, true);
-      await websocketService.registerUser(userId, userName);
-      await websocketService.createEvent(eventName);
+      // await websocketService.connect(userId, true);
+      // await websocketService.registerUser(userId, userName);
+      // await websocketService.createEvent(eventName);
+      console.warn("EventCreation: Old websocketService calls in handleCreateEvent commented out.");
+      setError('Event creation is temporarily disabled.'); // Inform user
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create event');
     }
@@ -126,9 +129,11 @@ export function EventCreation() {
 
     try {
       const userId = crypto.randomUUID();
-      await websocketService.connect(userId, false);
-      await websocketService.registerUser(userId, userName);
-      await websocketService.joinEvent(eventId);
+      // await websocketService.connect(userId, false);
+      // await websocketService.registerUser(userId, userName);
+      // await websocketService.joinEvent(eventId);
+      console.warn("EventCreation: Old websocketService calls in handleJoinEvent commented out.");
+      setError('Joining events is temporarily disabled.'); // Inform user
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join event');
     }

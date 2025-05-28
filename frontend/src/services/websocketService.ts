@@ -7,6 +7,26 @@ class WebSocketService {
   private messageHandlers: Set<MessageHandler> = new Set();
 
   async connect(userId: string, isHost: boolean) {
+    console.warn(
+      'OLD WebSocketService.connect() called for user', userId, 'isHost:', isHost,
+      '. This service is deprecated for Planning Poker and should not be actively connecting.',
+      'If you see this, an old part of the application might still be trying to use it.',
+      'Connection attempt will be blocked to prevent errors.'
+    );
+
+    // Prevent actual connection
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+    // Return a promise that does not resolve to mimic a failed/blocked connection attempt
+    return new Promise<void>((_resolve, reject) => {
+      // Reject after a short delay to ensure any calling code can handle it
+      setTimeout(() => reject(new Error('Old WebSocketService connection blocked.')), 50);
+    });
+
+    // Original connection logic (now commented out/bypassed):
+    /*
     if (this.socket) {
       this.socket.disconnect();
     }
@@ -45,6 +65,7 @@ class WebSocketService {
         reject(error);
       });
     });
+    */
   }
 
   subscribe(handler: MessageHandler) {

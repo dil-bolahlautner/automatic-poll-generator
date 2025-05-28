@@ -1,134 +1,200 @@
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import { VotingMessage } from '../types/websocket';
+import { planningPokerService, PlanningPokerService } from './planningPokerService'; // Import the service
+import { JiraTicket } from '../types/planningPoker'; // Assuming JiraTicket might be part of payloads
 
-interface Voter {
-  id: string;
-  isHost: boolean;
-  vote?: number | '?';
+// Define expected payload structures for clarity
+interface CreateSessionPayload {
+  hostName: string;
+  tickets: JiraTicket[]; // From frontend queue
 }
 
-interface VotingSession {
-  ticketKey: string;
-  isActive: boolean;
-  voters: Map<string, Voter>;
+interface JoinSessionPayload {
+  sessionId: string;
+  userName: string;
 }
+
+interface VotePayload {
+  sessionId: string;
+  vote: string;
+}
+
+interface HostActionPayload { // For actions like reveal, next ticket, start voting
+  sessionId: string;
+  ticketKey?: string; // Optional, e.g., for starting vote on a specific ticket
+}
+
 
 class WebSocketService {
   private io: Server;
-  private sessions: Map<string, VotingSession> = new Map();
+  // The PlanningPokerService will manage all session state.
+  // We inject it or use a singleton instance.
+  private pokerService: PlanningPokerService;
 
-  constructor(server: HttpServer) {
+  constructor(server: HttpServer, pokerServiceInstance: PlanningPokerService) {
+    this.pokerService = pokerServiceInstance;
     this.io = new Server(server, {
       cors: {
-        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-        methods: ['GET', 'POST']
-      }
+        origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173'], // Allow common dev ports
+        methods: ['GET', 'POST'],
+      },
+      path: '/socket.io/', // Explicitly set the default path on the server too
     });
 
-    this.io.on('connection', (socket) => {
-      const userId = socket.handshake.query.userId as string;
-      const isHost = socket.handshake.query.isHost === 'true';
+    this.initializeListeners();
+  }
 
-      console.log(`User connected: ${userId} (${isHost ? 'Host' : 'Voter'})`);
+  private initializeListeners(): void {
+    this.io.on('connection', (socket: Socket) => {
+      const socketId = socket.id;
+      // User's actual name/ID might come with join/create messages
+      console.log(`User connected with socket ID: ${socketId}`);
 
-      socket.on('voting-message', (message: VotingMessage) => {
-        this.handleVotingMessage(socket, userId, isHost, message);
+      // --- Planning Poker Event Handlers ---
+
+      socket.on('createSession', (payload: CreateSessionPayload) => {
+        console.log(`Received createSession from ${socketId}:`, payload);
+        try {
+          const session = this.pokerService.createSession(payload.hostName, payload.tickets, socketId);
+          // The pokerService's createSession method should handle broadcasting/notifying the host.
+          // If direct feedback is needed here:
+          // socket.emit('sessionCreated', session); // Send full session state back to host
+        } catch (error: any) {
+          console.error(`Error creating session for ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to create session: ' + error.message });
+        }
       });
 
+      socket.on('joinSession', (payload: JoinSessionPayload) => {
+        console.log(`Received joinSession from ${socketId}:`, payload);
+        try {
+          const session = this.pokerService.joinSession(payload.sessionId, payload.userName, socketId);
+          if (session) {
+            socket.join(payload.sessionId); // Join the socket.io room for this session
+            // pokerService's joinSession should handle broadcasting updates.
+            // socket.emit('sessionJoined', session); // Send full session state to joining user
+          } else {
+            socket.emit('error', { message: `Failed to join session ${payload.sessionId}. Session not found or user already in session.` });
+          }
+        } catch (error: any) {
+          console.error(`Error joining session for ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to join session: ' + error.message });
+        }
+      });
+
+      socket.on('submitVote', (payload: VotePayload) => {
+        console.log(`Received submitVote from ${socketId}:`, payload);
+        try {
+          this.pokerService.submitVote(payload.sessionId, socketId, payload.vote);
+          // pokerService's submitVote handles broadcasting updates.
+        } catch (error: any) {
+          console.error(`Error submitting vote for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to submit vote: ' + error.message });
+        }
+      });
+
+      socket.on('revealVotes', (payload: HostActionPayload) => {
+        console.log(`Received revealVotes from ${socketId}:`, payload);
+        try {
+          this.pokerService.revealVotes(payload.sessionId, socketId);
+          // pokerService's revealVotes handles broadcasting.
+        } catch (error: any) {
+          console.error(`Error revealing votes for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to reveal votes: ' + error.message });
+        }
+      });
+
+      socket.on('startVoting', (payload: HostActionPayload) => {
+        console.log(`Received startVoting from ${socketId}:`, payload);
+        try {
+          this.pokerService.startVoting(payload.sessionId, socketId, payload.ticketKey);
+          // pokerService's startVoting handles broadcasting.
+        } catch (error: any) {
+          console.error(`Error starting voting for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to start voting: ' + error.message });
+        }
+      });
+      
+      socket.on('nextTicket', (payload: HostActionPayload) => {
+        console.log(`Received nextTicket from ${socketId}:`, payload);
+        try {
+          this.pokerService.nextTicket(payload.sessionId, socketId);
+          // pokerService's nextTicket handles broadcasting.
+        } catch (error: any) {
+          console.error(`Error moving to next ticket for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to move to next ticket: ' + error.message });
+        }
+      });
+
+
       socket.on('disconnect', () => {
-        this.handleDisconnect(userId);
+        console.log(`User disconnected with socket ID: ${socketId}`);
+        this.pokerService.handleDisconnect(socketId); // Notify pokerService
       });
     });
   }
 
-  private handleVotingMessage(socket: any, userId: string, isHost: boolean, message: VotingMessage) {
-    switch (message.type) {
-      case 'start':
-        if (!isHost) return;
-        this.startVotingSession(message.ticketKey!, userId);
-        break;
+  // --- Methods for PlanningPokerService to send messages ---
 
-      case 'vote':
-        if (!message.ticketKey || !message.vote) return;
-        this.handleVote(message.ticketKey, userId, message.vote);
-        break;
+  /**
+   * Sends a message to a specific socket ID.
+   * @param socketId The ID of the socket (user).
+   * @param event The event name.
+   * @param data The data to send.
+   */
+  public sendToSocket(socketId: string, event: string, data: any): void {
+    this.io.to(socketId).emit(event, data);
+  }
 
-      case 'close':
-        if (!isHost || !message.ticketKey) return;
-        this.closeVotingSession(message.ticketKey);
-        break;
+  /**
+   * Sends a message to all sockets in a specific room (session).
+   * @param roomId The ID of the room (session ID).
+   * @param event The event name.
+   * @param data The data to send.
+   */
+  public broadcastToRoom(roomId: string, event: string, data: any): void {
+    this.io.to(roomId).emit(event, data);
+  }
 
-      case 'restart':
-        if (!isHost || !message.ticketKey) return;
-        this.restartVotingSession(message.ticketKey);
-        break;
+  /**
+   * Makes a socket join a room.
+   * @param socketId The ID of the socket.
+   * @param roomId The ID of the room to join.
+   */
+  public joinRoom(socketId: string, roomId: string): void {
+    const socket = this.io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.join(roomId);
+      console.log(`Socket ${socketId} joined room ${roomId}`);
+    } else {
+      console.warn(`Socket ${socketId} not found, cannot join room ${roomId}`);
     }
   }
 
-  private startVotingSession(ticketKey: string, hostId: string) {
-    const session: VotingSession = {
-      ticketKey,
-      isActive: true,
-      voters: new Map([[hostId, { id: hostId, isHost: true }]])
-    };
-
-    this.sessions.set(ticketKey, session);
-    this.broadcastSessionUpdate(ticketKey);
-  }
-
-  private handleVote(ticketKey: string, voterId: string, vote: number | '?') {
-    const session = this.sessions.get(ticketKey);
-    if (!session || !session.isActive) return;
-
-    const voter = session.voters.get(voterId);
-    if (!voter) return;
-
-    voter.vote = vote;
-    this.broadcastSessionUpdate(ticketKey);
-  }
-
-  private closeVotingSession(ticketKey: string) {
-    const session = this.sessions.get(ticketKey);
-    if (!session) return;
-
-    session.isActive = false;
-    this.broadcastSessionUpdate(ticketKey);
-  }
-
-  private restartVotingSession(ticketKey: string) {
-    const session = this.sessions.get(ticketKey);
-    if (!session) return;
-
-    session.isActive = true;
-    session.voters.forEach(voter => {
-      voter.vote = undefined;
-    });
-    this.broadcastSessionUpdate(ticketKey);
-  }
-
-  private handleDisconnect(userId: string) {
-    this.sessions.forEach((session, ticketKey) => {
-      session.voters.delete(userId);
-      if (session.voters.size === 0) {
-        this.sessions.delete(ticketKey);
-      } else {
-        this.broadcastSessionUpdate(ticketKey);
-      }
-    });
-  }
-
-  private broadcastSessionUpdate(ticketKey: string) {
-    const session = this.sessions.get(ticketKey);
-    if (!session) return;
-
-    const voters = Array.from(session.voters.values());
-    this.io.emit('voting-session-update', {
-      ticketKey,
-      isActive: session.isActive,
-      voters
-    });
+  /**
+   * Makes a socket leave a room.
+   * @param socketId The ID of the socket.
+   * @param roomId The ID of the room to leave.
+   */
+  public leaveRoom(socketId: string, roomId: string): void {
+    const socket = this.io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.leave(roomId);
+      console.log(`Socket ${socketId} left room ${roomId}`);
+    } else {
+      console.warn(`Socket ${socketId} not found, cannot leave room ${roomId}`);
+    }
   }
 }
 
-export default WebSocketService; 
+// This service needs to be instantiated with the HttpServer and PlanningPokerService instance.
+// Example instantiation (would happen in your main server setup file, e.g., app.ts or server.ts):
+// import { createServer } from 'http';
+// import express from 'express';
+// const app = express();
+// const httpServer = createServer(app);
+// const pokerService = new PlanningPokerService(); // or planningPokerService singleton
+// const wsService = new WebSocketService(httpServer, pokerService);
+// pokerService.setWebSocketCommunicator(wsService); // If using a setter method
+
+export default WebSocketService;
