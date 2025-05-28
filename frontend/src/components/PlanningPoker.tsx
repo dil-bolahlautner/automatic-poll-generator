@@ -1,3 +1,13 @@
+/**
+ * PlanningPoker Component
+ * 
+ * A real-time planning poker session component that allows teams to:
+ * - Create and join planning poker sessions
+ * - Vote on story points using Fibonacci sequence
+ * - View real-time voting results and statistics
+ * - Manage session flow (start voting, reveal votes, next ticket)
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
@@ -26,10 +36,15 @@ import { PlanningPokerSession, JiraTicket as FrontendJiraTicket, ErrorPayload, P
 // import { Link as RouterLink } from 'react-router-dom'; // Not needed for external link
 import { jiraService } from '../services/jiraService'; // Import jiraService
 
+// Fibonacci sequence cards for story point estimation
 const FIBONACCI_CARDS = ['0', '1/2', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
 
-
+/**
+ * Main Planning Poker component
+ * @returns {JSX.Element} The rendered component
+ */
 export function PlanningPoker() {
+  // Context and state hooks
   const { queue: ticketsFromQueue, removeFromQueue } = useQueue();
   const [session, setSession] = useState<PlanningPokerSession | null>(null);
   const [userName, setUserName] = useState<string>(localStorage.getItem('planningPokerUserName') || '');
@@ -39,6 +54,10 @@ export function PlanningPoker() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   // const [currentView, setCurrentView] = useState<'initial' | 'lobby' | 'voting' | 'results'>('initial'); // Simplified for now
 
+  /**
+   * Handles session updates from WebSocket
+   * @param updatedSession - The updated session data
+   */
   const handleSessionUpdate = useCallback((updatedSession: PlanningPokerSession) => {
     console.log('Received session update:', updatedSession);
     setSession(updatedSession);
@@ -47,16 +66,22 @@ export function PlanningPoker() {
     // The logic for setting myUserId is moved to the connect .then() block
   }, [/* Removed myUserId, userName. Add back userName if it's used for other reasons here */]);
 
+  /**
+   * Handles WebSocket errors
+   * @param error - The error payload
+   */
   const handleError = useCallback((error: ErrorPayload) => {
     console.error('WebSocket Error:', error);
     setWsError(error.message || 'An unknown WebSocket error occurred.');
     setIsLoading(false);
   }, []);
 
+  // Persist username in localStorage
   useEffect(() => {
     localStorage.setItem('planningPokerUserName', userName);
   }, [userName]);
 
+  // Initialize WebSocket connection
   useEffect(() => {
     setIsLoading(true);
     // Define stable callbacks for connect
@@ -95,7 +120,9 @@ export function PlanningPoker() {
     };
   }, []); // Ensure this effect runs only once on mount
 
-
+  /**
+   * Creates a new planning poker session
+   */
   const handleCreateSession = () => {
     if (!userName.trim()) {
       setWsError('Please enter your name.');
@@ -129,6 +156,9 @@ export function PlanningPoker() {
     planningPokerWsService.createSession(userName.trim(), backendTickets);
   };
 
+  /**
+   * Joins an existing planning poker session
+   */
   const handleJoinSession = () => {
     if (!userName.trim()) {
       setWsError('Please enter your name.');
@@ -143,10 +173,17 @@ export function PlanningPoker() {
     planningPokerWsService.joinSession(sessionIdToJoin.trim(), userName.trim());
   };
 
+  /**
+   * Removes a ticket from the queue
+   * @param ticketKey - The key of the ticket to remove
+   */
   const handleRemoveTicketFromQueue = (ticketKey: string) => {
     removeFromQueue(ticketKey);
   };
 
+  /**
+   * Starts voting on the current ticket
+   */
   const handleStartVoting = () => {
     setIsLoading(true);
     if (session?.id && session.currentTicketKey) {
@@ -158,6 +195,10 @@ export function PlanningPoker() {
     }
   };
 
+  /**
+   * Submits a vote for the current ticket
+   * @param voteValue - The story point value to vote for
+   */
   const handleVote = (voteValue: string) => {
     if (session?.id && me && !me.hasVoted && session.votingOpen) {
       setIsLoading(true); // Indicate activity while vote is sent
@@ -165,6 +206,9 @@ export function PlanningPoker() {
     }
   };
 
+  /**
+   * Reveals all votes for the current ticket
+   */
   const handleRevealVotes = () => {
     if (session?.id && me?.isHost) {
       setIsLoading(true);
@@ -172,13 +216,15 @@ export function PlanningPoker() {
     }
   };
 
+  /**
+   * Moves to the next ticket in the session
+   */
   const handleNextTicket = () => {
     if (session?.id && me?.isHost) {
       setIsLoading(true);
       planningPokerWsService.nextTicket(session.id);
     }
   };
-
 
   // --- Render logic starts here ---
 

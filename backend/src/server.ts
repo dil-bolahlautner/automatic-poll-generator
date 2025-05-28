@@ -1,3 +1,8 @@
+/**
+ * Main server file for the Planning Poker application
+ * Handles HTTP and WebSocket connections, routes, and core application setup
+ */
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -15,22 +20,23 @@ import { planningPokerService } from './services/planningPokerService';
 // Load environment variables from .env file
 dotenv.config();
 
-// Debug: Log environment variables
+// Debug: Log environment variables (safely)
 console.log('Environment Variables:');
 console.log('CONFLUENCE_USERNAME:', process.env.CONFLUENCE_USERNAME);
 console.log('CONFLUENCE_API_TOKEN:', process.env.CONFLUENCE_API_TOKEN ? '***' : undefined);
 
+// Initialize Express application and HTTP server
 const app = express();
 const httpServer = createServer(app);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Configure middleware
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json()); // Parse JSON request bodies
 
-// Routes
-app.use('/api/jira', jiraRouter);
-app.use('/api/confluence', confluenceRoutes);
-app.use('/api/teams', teamsRouter);
+// Register API routes
+app.use('/api/jira', jiraRouter); // Jira integration endpoints
+app.use('/api/confluence', confluenceRoutes); // Confluence integration endpoints
+app.use('/api/teams', teamsRouter); // Teams integration endpoints
 
 // Initialize and wire up Planning Poker services
 const wsService = new WebSocketService(httpServer, planningPokerService);
@@ -40,7 +46,7 @@ console.log('New Planning Poker WebSocketService initialized.');
 
 // --- OLD WebSocket Logic (Commented out as new system should replace it for Planning Poker) ---
 /*
-// Create Socket.IO server
+// Create Socket.IO server with CORS configuration
 const io = new Server(httpServer, {
   cors: {
     origin: "http://localhost:3000",
@@ -51,7 +57,7 @@ const io = new Server(httpServer, {
 
 console.log('Old WebSocket server initialized with path:', '/ws/estimation');
 
-// Store connected users and events
+// In-memory storage for connected users and events
 const connectedUsers = new Map<string, { name: string; isHost: boolean }>();
 const events = new Map<string, {
   id: string;
@@ -79,16 +85,19 @@ const events = new Map<string, {
   }>;
 }>();
 
+// WebSocket connection handling
 io.on('connection', (socket) => {
   console.log('New client connected to OLD WS:', socket.id);
   console.log('Auth data (OLD WS):', socket.handshake.auth);
   
   let userId: string | null = null;
 
+  // Handle user registration
   socket.on('register', (data: { userId: string; name: string; isHost: boolean }, callback) => {
     console.log('OLD WS Registration attempt:', data);
     const { userId: newUserId, name, isHost } = data;
     
+    // Check if username is already taken
     const isNameTaken = Array.from(connectedUsers.values()).some(
       user => user.name.toLowerCase() === name.toLowerCase()
     );
@@ -105,6 +114,7 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Register user if name is available
     userId = newUserId;
     if (userId) {
       console.log('OLD WS User registered successfully:', { userId, name, isHost });
@@ -117,6 +127,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle event creation
   socket.on('create_event', (data: { name: string; hostId: string }) => {
     console.log('OLD WS Received create_event request:', data);
     if (!userId || !socket.data) {
@@ -145,6 +156,7 @@ io.on('connection', (socket) => {
     socket.emit('EVENT_CREATED', { type: 'EVENT_CREATED', payload: { event, eventId } });
   });
 
+  // Handle event joining
   socket.on('join_event', (data: { eventId: string; userId: string }) => {
     if (!userId || !socket.data) return;
     const event = events.get(data.eventId);
@@ -159,6 +171,7 @@ io.on('connection', (socket) => {
     io.to(data.eventId).emit('voter_joined', { voter: participant });
   });
 
+  // Handle event leaving
   socket.on('leave_event', (data: { eventId: string; userId: string }) => {
     if (!userId) return;
     const event = events.get(data.eventId);
@@ -173,6 +186,7 @@ io.on('connection', (socket) => {
     io.to(data.eventId).emit('voter_left', { voterId: userId });
   });
 
+  // Handle voting start
   socket.on('start_voting', (data: { eventId: string; ticketKey: string }) => {
     if (!userId) return;
     const event = events.get(data.eventId);
@@ -184,6 +198,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle vote submission
   socket.on('vote', (data: { eventId: string; ticketKey: string; vote: number | '?' }) => {
     if (!userId || !socket.data) return;
     const event = events.get(data.eventId);
@@ -195,6 +210,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle voting closure and result calculation
   socket.on('close_voting', (data: { eventId: string; ticketKey: string }) => {
     if (!userId) return;
     const event = events.get(data.eventId);
@@ -204,6 +220,7 @@ io.on('connection', (socket) => {
       ticket.status = 'closed';
       const votes = Object.values(ticket.votes).filter(v => typeof v === 'number') as number[];
       if (votes.length > 0) {
+        // Calculate voting statistics
         const average = votes.reduce((a, b) => a + b, 0) / votes.length;
         const sorted = [...votes].sort((a, b) => a - b);
         const median = sorted.length % 2 === 0 ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2 : sorted[Math.floor(sorted.length / 2)];
@@ -216,6 +233,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle voting restart
   socket.on('restart_voting', (data: { eventId: string; ticketKey: string }) => {
     if (!userId) return;
     const event = events.get(data.eventId);
@@ -229,6 +247,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle client disconnection
   socket.on('disconnect', () => {
     if (userId) {
       connectedUsers.delete(userId);

@@ -1,19 +1,33 @@
+/**
+ * JIRA Service
+ * 
+ * Service responsible for interacting with the JIRA API, including:
+ * - Fetching tickets and their details
+ * - Managing fix versions
+ * - Handling sprint information
+ * - Processing ticket relationships and dependencies
+ */
+
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { jiraConfig } from '../config/jira';
 
 dotenv.config();
 
-// Ensure the base URL is properly formatted
+// JIRA API configuration
 const jiraHost = process.env.JIRA_HOST || 'https://diligentbrands.atlassian.net';
 const jiraBaseUrl = `${jiraHost}/rest/api/2`;
 const jiraAgileBaseUrl = `${jiraHost}/rest/agile/1.0`;
 
+// Authentication configuration for JIRA API
 const jiraAuth = {
   username: process.env.JIRA_USERNAME || '',
   password: process.env.JIRA_API_TOKEN || ''
 };
 
+/**
+ * Interface representing a JIRA Sprint
+ */
 export interface Sprint {
   id: number;
   self: string;
@@ -26,18 +40,27 @@ export interface Sprint {
   goal?: string;
 }
 
+/**
+ * Interface representing a JIRA Fix Version
+ */
 export interface FixVersion {
   id: string;
   name: string;
   released: boolean;
 }
 
+/**
+ * Interface representing a linked JIRA issue
+ */
 export interface LinkedIssue {
   key: string;
   type: string;
   direction: 'inward' | 'outward';
 }
 
+/**
+ * Interface representing a JIRA ticket with all relevant fields
+ */
 export interface JiraTicket {
   key: string;
   summary: string;
@@ -45,7 +68,7 @@ export interface JiraTicket {
   status: string;
   labels: string[];
   reporter?: string;
-  assignee?: string; // Added assignee
+  assignee?: string;
   fixVersions: FixVersion[];
   linkedIssues: LinkedIssue[];
   blockingIssues: JiraTicket[];
@@ -55,7 +78,15 @@ export interface JiraTicket {
   };
 }
 
+/**
+ * JIRA Service implementation
+ */
 export const jiraService = {
+  /**
+   * Fetches all JIRA tickets based on the configured filter
+   * Implements pagination to handle large result sets
+   * @returns Object containing array of tickets and total count
+   */
   async getTickets(): Promise<{ tickets: JiraTicket[], total: number }> {
     try {
       console.log('\n=== JIRA API CALL START ===');
@@ -73,6 +104,7 @@ export const jiraService = {
       const maxTotalResults = 10000; // Our maximum desired results
       let totalCount = 0;
       
+      // Paginate through all results
       while (true) {
         console.log(`\nFetching page ${startAt / maxResults + 1}...`);
         try {
@@ -124,13 +156,13 @@ export const jiraService = {
 
       console.log('\nTotal issues collected:', allIssues.length);
 
+      // Transform raw JIRA issues into our ticket format
       const transformedTickets = allIssues
         .map((issue: any) => {
           try {
-            // Get blocking issues (issues that block this ticket)
+            // Extract blocking issues (issues that block this ticket)
             const blockingIssues = (issue.fields.issuelinks || [])
               .filter((link: any) => {
-                // Check if this is a "blocks" link where this ticket is the outward issue
                 return link.type.name === 'Blocks' && link.outwardIssue;
               })
               .map((link: any) => ({
@@ -140,6 +172,7 @@ export const jiraService = {
                 type: link.outwardIssue.fields.issuetype.name
               }));
 
+            // Transform issue into our ticket format
             return {
               key: issue.key,
               summary: issue.fields.summary,
@@ -198,6 +231,10 @@ export const jiraService = {
     }
   },
 
+  /**
+   * Fetches all fix versions for the configured project
+   * @returns Array of fix versions
+   */
   async getFixVersions(): Promise<FixVersion[]> {
     try {
       const response = await axios.get(`${jiraBaseUrl}/project/QST/versions`, {
@@ -214,10 +251,21 @@ export const jiraService = {
     }
   },
 
+  /**
+   * Generates the URL for a JIRA ticket
+   * @param key - The JIRA ticket key
+   * @returns The full URL to the ticket
+   */
   getTicketUrl(key: string): string {
     return `https://${process.env.JIRA_HOST}/browse/${key}`;
   },
 
+  /**
+   * Searches for sprints on a specific board
+   * @param boardId - The JIRA board ID
+   * @param nameQuery - Optional name filter for sprints
+   * @returns Array of matching sprints
+   */
   async searchSprints(boardId: string, nameQuery?: string): Promise<Sprint[]> {
     if (!boardId) {
       console.error('JIRA_BOARD_ID is not configured.');
@@ -230,6 +278,7 @@ export const jiraService = {
       let isLastPage = false;
       const maxResultsPerPage = 50; // Default for Jira, can be adjusted if API allows
 
+      // Paginate through all sprints
       while (!isLastPage) {
         console.log(`Fetching sprints for board ${boardId}, page starting at ${startAt}`);
         const response = await axios.get(`${jiraAgileBaseUrl}/board/${boardId}/sprint`, {
@@ -241,6 +290,7 @@ export const jiraService = {
           }
         });
 
+        // Transform sprint data
         const fetchedSprints: Sprint[] = response.data.values.map((sprint: any) => ({
           id: sprint.id,
           self: sprint.self,
@@ -252,147 +302,90 @@ export const jiraService = {
           originBoardId: sprint.originBoardId,
           goal: sprint.goal
         }));
-        
-        allSprints = allSprints.concat(fetchedSprints);
+
+        // Filter by name if query provided
+        const filteredSprints = nameQuery
+          ? fetchedSprints.filter(sprint => 
+              sprint.name.toLowerCase().includes(nameQuery.toLowerCase()))
+          : fetchedSprints;
+
+        allSprints = [...allSprints, ...filteredSprints];
+
+        // Check if we've reached the last page
         isLastPage = response.data.isLast;
-
         if (!isLastPage) {
-          // Jira's `startAt` is the index of the first item.
-          // If `maxResults` is 50 and `startAt` was 0, next `startAt` is 50.
-          // If `response.data.values.length` is less than `maxResults`, it's also the last page,
-          // but `isLast` should correctly indicate this.
-          startAt = response.data.startAt + response.data.values.length;
+          startAt += maxResultsPerPage;
         }
-        console.log(`Fetched ${fetchedSprints.length} sprints. Total collected: ${allSprints.length}. Is last page: ${isLastPage}`);
       }
 
-      if (nameQuery) {
-        allSprints = allSprints.filter(sprint => sprint.name.toLowerCase().includes(nameQuery.toLowerCase()));
-      }
-      
-      // Sort sprints by start date in descending order (newest first) as a common default
-      // Sprints without a start date will be at the end.
-      allSprints.sort((a, b) => {
-        if (a.startDate && b.startDate) {
-          return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
-        }
-        if (a.startDate) return -1; // a comes first
-        if (b.startDate) return 1;  // b comes first
-        return 0; // no change in order if neither has a start date
-      });
+      console.log(`Found ${allSprints.length} sprints`);
+      console.log('=== JIRA API CALL END ===\n');
 
-      console.log('Total sprints fetched and processed:', allSprints.length);
-      console.log('=== JIRA API CALL END (searchSprints) ===\n');
       return allSprints;
-    } catch (error: any) {
-      console.error('\n=== JIRA API ERROR (searchSprints) ===');
-      console.error('Error fetching sprints:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        boardId: boardId
-      });
-      console.error('=== JIRA API ERROR END (searchSprints) ===\n');
+    } catch (error) {
+      console.error('Error searching sprints:', error);
       throw error;
     }
   },
 
+  /**
+   * Fetches all tickets for a specific sprint
+   * @param sprintId - The JIRA sprint ID
+   * @returns Object containing array of tickets and total count
+   */
   async getTicketsForSprint(sprintId: string): Promise<{ tickets: JiraTicket[], total: number }> {
     try {
-      console.log(`\n=== JIRA API CALL START (getTicketsForSprint for sprint ${sprintId}) ===`);
-      let allIssues: any[] = [];
-      let startAt = 0;
-      const maxResults = 100;
-      let totalCount = 0;
-
-      while (true) {
-        const response = await axios.get(`${jiraAgileBaseUrl}/sprint/${sprintId}/issue`, {
-          auth: jiraAuth,
-          params: {
-            jql: jiraConfig.sprintIssuesJql || '', // Optional additional JQL
-            fields: jiraConfig.fields.join(','),
-            startAt,
-            maxResults
-          }
-        });
-
-        if (startAt === 0) {
-          totalCount = response.data.total;
+      console.log(`\n=== JIRA API CALL START (getTicketsForSprint ${sprintId}) ===`);
+      const response = await axios.get(`${jiraAgileBaseUrl}/sprint/${sprintId}/issue`, {
+        auth: jiraAuth,
+        params: {
+          fields: jiraConfig.fields.join(',')
         }
-        allIssues = [...allIssues, ...response.data.issues];
-
-        if (response.data.issues.length < maxResults || (response.data.startAt + response.data.issues.length) >= response.data.total) {
-          break;
-        }
-        startAt += maxResults;
-      }
-      
-      console.log('\nTotal issues collected for sprint:', allIssues.length);
-
-      const transformedTickets = allIssues
-        .map((issue: any) => {
-          // Transformation logic copied and adapted from getTickets()
-          const blockingIssues = (issue.fields.issuelinks || [])
-            .filter((link: any) => link.type.name === 'Blocks' && link.outwardIssue)
-            .map((link: any) => ({
-              key: link.outwardIssue.key,
-              summary: link.outwardIssue.fields.summary,
-              status: link.outwardIssue.fields.status.name,
-              type: link.outwardIssue.fields.issuetype.name
-            }));
-
-          return {
-            key: issue.key,
-            summary: issue.fields.summary,
-            type: issue.fields.issuetype.name,
-            status: issue.fields.status.name,
-            labels: issue.fields.labels || [],
-            reporter: issue.fields.reporter?.displayName,
-            assignee: issue.fields.assignee?.displayName, // Added assignee mapping
-            fixVersions: (issue.fields.fixVersions || []).map((version: any) => ({
-              id: version.id,
-              name: version.name,
-              released: version.released
-            })),
-            linkedIssues: (issue.fields.issuelinks || []).map((link: any) => {
-              const isInward = !!link.inwardIssue;
-              return {
-                type: isInward ? link.type.inward : link.type.outward,
-                key: isInward ? link.inwardIssue.key : link.outwardIssue.key,
-                direction: isInward ? 'inward' : 'outward'
-              };
-            }),
-            blockingIssues: blockingIssues,
-            parent: issue.fields.parent ? {
-              key: issue.fields.parent.key,
-              summary: issue.fields.parent.fields.summary,
-              // Attempt to get parent type if available, might need specific field inclusion
-              type: issue.fields.parent.fields?.issuetype?.name
-            } : undefined
-          } as JiraTicket;
-        })
-        .filter((ticket): ticket is JiraTicket => ticket !== null);
-
-      console.log('\nTransformed response for sprint:', {
-        ticketsCount: transformedTickets.length,
-        total: totalCount,
-        sampleTicket: transformedTickets[0]
       });
-      console.log('=== JIRA API CALL END (getTicketsForSprint) ===\n');
+
+      const transformedTickets = response.data.issues.map((issue: any) => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        type: issue.fields.issuetype.name,
+        status: issue.fields.status.name,
+        labels: issue.fields.labels || [],
+        reporter: issue.fields.reporter?.displayName,
+        fixVersions: (issue.fields.fixVersions || []).map((version: any) => ({
+          id: version.id,
+          name: version.name,
+          released: version.released
+        })),
+        linkedIssues: (issue.fields.issuelinks || []).map((link: any) => {
+          const isInward = !!link.inwardIssue;
+          return {
+            type: isInward ? link.type.inward : link.type.outward,
+            key: isInward ? link.inwardIssue.key : link.outwardIssue.key,
+            direction: isInward ? 'inward' : 'outward'
+          };
+        }),
+        blockingIssues: (issue.fields.issuelinks || [])
+          .filter((link: any) => link.type.name === 'Blocks' && link.outwardIssue)
+          .map((link: any) => ({
+            key: link.outwardIssue.key,
+            summary: link.outwardIssue.fields.summary,
+            status: link.outwardIssue.fields.status.name,
+            type: link.outwardIssue.fields.issuetype.name
+          })),
+        parent: issue.fields.parent ? {
+          key: issue.fields.parent.key,
+          summary: issue.fields.parent.fields.summary
+        } : undefined
+      }));
+
+      console.log(`Found ${transformedTickets.length} tickets in sprint`);
+      console.log('=== JIRA API CALL END ===\n');
+
       return {
         tickets: transformedTickets,
-        total: totalCount
+        total: response.data.total
       };
-
-    } catch (error: any) {
-      console.error('\n=== JIRA API ERROR (getTicketsForSprint) ===');
-      console.error('Error fetching tickets for sprint:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        sprintId: sprintId
-      });
-      console.error('=== JIRA API ERROR END (getTicketsForSprint) ===\n');
+    } catch (error) {
+      console.error('Error fetching sprint tickets:', error);
       throw error;
     }
   }

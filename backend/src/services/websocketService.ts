@@ -1,9 +1,19 @@
+/**
+ * WebSocket Service
+ * 
+ * Handles real-time communication for the Planning Poker application using Socket.IO.
+ * Manages WebSocket connections, room management, and event handling for planning poker sessions.
+ * Integrates with PlanningPokerService for business logic and state management.
+ */
+
 import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { planningPokerService, PlanningPokerService } from './planningPokerService'; // Import the service
 import { JiraTicket } from '../types/planningPoker'; // Assuming JiraTicket might be part of payloads
 
-// Define expected payload structures for clarity
+/**
+ * Payload interfaces for WebSocket events
+ */
 interface CreateSessionPayload {
   hostName: string;
   tickets: JiraTicket[]; // From frontend queue
@@ -24,13 +34,20 @@ interface HostActionPayload { // For actions like reveal, next ticket, start vot
   ticketKey?: string; // Optional, e.g., for starting vote on a specific ticket
 }
 
-
+/**
+ * WebSocket service class that manages real-time communication
+ */
 class WebSocketService {
   private io: Server;
   // The PlanningPokerService will manage all session state.
   // We inject it or use a singleton instance.
   private pokerService: PlanningPokerService;
 
+  /**
+   * Creates a new WebSocket service instance
+   * @param server - The HTTP server instance
+   * @param pokerServiceInstance - The planning poker service instance
+   */
   constructor(server: HttpServer, pokerServiceInstance: PlanningPokerService) {
     this.pokerService = pokerServiceInstance;
     this.io = new Server(server, {
@@ -44,6 +61,10 @@ class WebSocketService {
     this.initializeListeners();
   }
 
+  /**
+   * Initializes WebSocket event listeners
+   * Sets up handlers for all planning poker related events
+   */
   private initializeListeners(): void {
     this.io.on('connection', (socket: Socket) => {
       const socketId = socket.id;
@@ -52,6 +73,10 @@ class WebSocketService {
 
       // --- Planning Poker Event Handlers ---
 
+      /**
+       * Handles session creation requests
+       * Creates a new planning poker session with the specified host and tickets
+       */
       socket.on('createSession', (payload: CreateSessionPayload) => {
         console.log(`Received createSession from ${socketId}:`, payload);
         try {
@@ -65,6 +90,10 @@ class WebSocketService {
         }
       });
 
+      /**
+       * Handles session join requests
+       * Allows users to join an existing planning poker session
+       */
       socket.on('joinSession', (payload: JoinSessionPayload) => {
         console.log(`Received joinSession from ${socketId}:`, payload);
         try {
@@ -82,6 +111,10 @@ class WebSocketService {
         }
       });
 
+      /**
+       * Handles vote submissions
+       * Processes votes from participants in a planning poker session
+       */
       socket.on('submitVote', (payload: VotePayload) => {
         console.log(`Received submitVote from ${socketId}:`, payload);
         try {
@@ -93,6 +126,10 @@ class WebSocketService {
         }
       });
 
+      /**
+       * Handles vote reveal requests
+       * Allows the host to reveal all votes for the current ticket
+       */
       socket.on('revealVotes', (payload: HostActionPayload) => {
         console.log(`Received revealVotes from ${socketId}:`, payload);
         try {
@@ -104,6 +141,10 @@ class WebSocketService {
         }
       });
 
+      /**
+       * Handles voting start requests
+       * Allows the host to start voting on a specific ticket
+       */
       socket.on('startVoting', (payload: HostActionPayload) => {
         console.log(`Received startVoting from ${socketId}:`, payload);
         try {
@@ -115,6 +156,10 @@ class WebSocketService {
         }
       });
       
+      /**
+       * Handles next ticket requests
+       * Allows the host to move to the next ticket in the session
+       */
       socket.on('nextTicket', (payload: HostActionPayload) => {
         console.log(`Received nextTicket from ${socketId}:`, payload);
         try {
@@ -126,7 +171,10 @@ class WebSocketService {
         }
       });
 
-
+      /**
+       * Handles client disconnection
+       * Cleans up resources and notifies the planning poker service
+       */
       socket.on('disconnect', () => {
         console.log(`User disconnected with socket ID: ${socketId}`);
         this.pokerService.handleDisconnect(socketId); // Notify pokerService
@@ -137,29 +185,29 @@ class WebSocketService {
   // --- Methods for PlanningPokerService to send messages ---
 
   /**
-   * Sends a message to a specific socket ID.
-   * @param socketId The ID of the socket (user).
-   * @param event The event name.
-   * @param data The data to send.
+   * Sends a message to a specific socket ID
+   * @param socketId - The ID of the socket (user)
+   * @param event - The event name
+   * @param data - The data to send
    */
   public sendToSocket(socketId: string, event: string, data: any): void {
     this.io.to(socketId).emit(event, data);
   }
 
   /**
-   * Sends a message to all sockets in a specific room (session).
-   * @param roomId The ID of the room (session ID).
-   * @param event The event name.
-   * @param data The data to send.
+   * Broadcasts a message to all sockets in a specific room (session)
+   * @param roomId - The ID of the room (session ID)
+   * @param event - The event name
+   * @param data - The data to send
    */
   public broadcastToRoom(roomId: string, event: string, data: any): void {
     this.io.to(roomId).emit(event, data);
   }
 
   /**
-   * Makes a socket join a room.
-   * @param socketId The ID of the socket.
-   * @param roomId The ID of the room to join.
+   * Makes a socket join a room
+   * @param socketId - The ID of the socket
+   * @param roomId - The ID of the room to join
    */
   public joinRoom(socketId: string, roomId: string): void {
     const socket = this.io.sockets.sockets.get(socketId);
@@ -172,9 +220,9 @@ class WebSocketService {
   }
 
   /**
-   * Makes a socket leave a room.
-   * @param socketId The ID of the socket.
-   * @param roomId The ID of the room to leave.
+   * Makes a socket leave a room
+   * @param socketId - The ID of the socket
+   * @param roomId - The ID of the room to leave
    */
   public leaveRoom(socketId: string, roomId: string): void {
     const socket = this.io.sockets.sockets.get(socketId);

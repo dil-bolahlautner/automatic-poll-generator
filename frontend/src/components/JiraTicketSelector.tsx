@@ -1,3 +1,14 @@
+/**
+ * JiraTicketSelector Component
+ * 
+ * A comprehensive ticket management interface that allows users to:
+ * - View and filter JIRA tickets
+ * - Select tickets for PBR planning or estimation
+ * - Generate Confluence tables
+ * - Add tickets to the PBR queue
+ * - Sort and filter tickets by various criteria
+ */
+
 import React, { useState, useMemo } from 'react';
 import {
   Box,
@@ -45,6 +56,7 @@ import { useQueue } from '../contexts/QueueContext';
 import { useNavigate } from 'react-router-dom';
 import { SelectChangeEvent } from '@mui/material';
 
+// Type definitions for sorting and table headers
 type Order = 'asc' | 'desc';
 
 interface HeadCell {
@@ -55,6 +67,7 @@ interface HeadCell {
   filterType: 'text' | 'select' | 'none';
 }
 
+// Define table column headers with their properties
 const headCells: HeadCell[] = [
   { id: 'key', label: 'Key', sortable: true, filterable: true, filterType: 'text' },
   { id: 'summary', label: 'Summary', sortable: true, filterable: true, filterType: 'text' },
@@ -65,7 +78,12 @@ const headCells: HeadCell[] = [
   { id: 'blockingIssues', label: 'Depending on', sortable: false, filterable: false, filterType: 'none' }
 ];
 
+/**
+ * Main component for JIRA ticket selection and management
+ * @returns {JSX.Element} The rendered component
+ */
 export const JiraTicketSelector: React.FC = () => {
+  // Context and state hooks
   const { tickets = [], total = 0, fixVersions = [], isLoading, error: jiraError } = useJira();
   const [selectedVersions, setSelectedVersions] = usePersistedState<string[]>('selectedVersions', []);
   const [isVersionsExpanded, setIsVersionsExpanded] = usePersistedState<boolean>('isVersionsExpanded', false);
@@ -81,6 +99,10 @@ export const JiraTicketSelector: React.FC = () => {
   const [confluenceError, setConfluenceError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  /**
+   * Toggles the selection of a fix version and clears filters
+   * @param versionId - The ID of the version to toggle
+   */
   const handleVersionToggle = (versionId: string) => {
     setSelectedVersions((prev: string[]) => {
       const newSelection = prev.includes(versionId)
@@ -94,6 +116,10 @@ export const JiraTicketSelector: React.FC = () => {
     });
   };
 
+  /**
+   * Handles the selection/deselection of a ticket
+   * @param ticketKey - The key of the ticket to toggle
+   */
   const handleTicketSelect = (ticketKey: string) => {
     if (queue.some(t => t.key === ticketKey)) return;
 
@@ -108,6 +134,9 @@ export const JiraTicketSelector: React.FC = () => {
     );
   };
 
+  /**
+   * Toggles selection of all visible tickets
+   */
   const handleSelectAll = () => {
     if (selectedTicketKeys.size === tickets.length) {
       setSelectedTicketKeys(new Set());
@@ -116,12 +145,20 @@ export const JiraTicketSelector: React.FC = () => {
     }
   };
 
+  /**
+   * Handles sorting of tickets by a specific property
+   * @param property - The property to sort by
+   */
   const handleRequestSort = (property: keyof JiraTicket | 'milestone') => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
+  /**
+   * Handles changes to select-type filters
+   * @param property - The property being filtered
+   */
   const handleFilterChange = (property: string) => (event: SelectChangeEvent<string>) => {
     setFilters(prev => ({
       ...prev,
@@ -129,6 +166,10 @@ export const JiraTicketSelector: React.FC = () => {
     }));
   };
 
+  /**
+   * Handles changes to text-type filters
+   * @param property - The property being filtered
+   */
   const handleTextFilterChange = (property: string) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFilters(prev => ({
       ...prev,
@@ -136,13 +177,22 @@ export const JiraTicketSelector: React.FC = () => {
     }));
   };
 
+  /**
+   * Extracts milestone information from ticket parent summary
+   * @param ticket - The ticket to extract milestone from
+   * @returns The milestone value or 'N/A' if not found
+   */
   const getMilestoneValue = (ticket: JiraTicket) => {
     if (!ticket.parent) return 'N/A';
     const match = ticket.parent.summary.match(/\[(M[^\]]*)\]/);
     return match ? match[1] : 'NM';
   };
 
-  // Get distinct values for dropdown filters based on currently filtered tickets
+  /**
+   * Gets distinct values for dropdown filters based on currently filtered tickets
+   * @param tickets - The tickets to analyze
+   * @returns Object containing arrays of distinct values for each filter type
+   */
   const getDistinctValues = (tickets: JiraTicket[]) => {
     const values: Record<string, Set<string>> = {
       milestone: new Set(),
@@ -177,7 +227,7 @@ export const JiraTicketSelector: React.FC = () => {
     } as const;
   };
 
-  // Get filtered tickets based on selected versions
+  // Filter tickets based on selected versions
   const versionFilteredTickets = useMemo(() => {
     if (selectedVersions.length === 0) {
       return tickets;
@@ -193,6 +243,7 @@ export const JiraTicketSelector: React.FC = () => {
     [versionFilteredTickets]
   );
 
+  // Apply filters and sorting to tickets
   const filteredTickets = useMemo(() => {
     let result = versionFilteredTickets;
     

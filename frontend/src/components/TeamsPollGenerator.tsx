@@ -1,3 +1,15 @@
+/**
+ * TeamsPollGenerator Component
+ * 
+ * A component that generates Microsoft Teams polls for JIRA tickets.
+ * It allows users to:
+ * - Enter a Teams meeting ID
+ * - View the list of tickets to generate polls for
+ * - Generate polls for all tickets in the list
+ * 
+ * The component receives the tickets to generate polls for through the router state.
+ */
+
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
@@ -13,6 +25,9 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 
+/**
+ * Interface representing a JIRA ticket structure
+ */
 interface JiraTicket {
   key: string;
   fields: {
@@ -20,12 +35,21 @@ interface JiraTicket {
   };
 }
 
+/**
+ * TeamsPollGenerator component for creating Teams polls from JIRA tickets
+ * @returns React component
+ */
 export function TeamsPollGenerator() {
+  // Get tickets from router state
   const location = useLocation();
   const [meetingId, setMeetingId] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [tickets] = useState<JiraTicket[]>(location.state?.tickets || []);
 
+  /**
+   * Handles the generation of Teams polls for all tickets
+   * Makes an API call to create polls in the specified Teams meeting
+   */
   const handleGeneratePolls = async () => {
     try {
       setIsGenerating(true);
@@ -42,10 +66,12 @@ export function TeamsPollGenerator() {
 
   return (
     <Box>
+      {/* Component title */}
       <Typography variant="h4" gutterBottom>
         Teams Poll Generator
       </Typography>
 
+      {/* Meeting ID input and generate button */}
       <Paper sx={{ p: 2, mb: 2 }}>
         <TextField
           fullWidth
@@ -71,6 +97,7 @@ export function TeamsPollGenerator() {
         </Button>
       </Paper>
 
+      {/* List of tickets to generate polls for */}
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" gutterBottom>
           Tickets to Generate Polls For ({tickets.length})
