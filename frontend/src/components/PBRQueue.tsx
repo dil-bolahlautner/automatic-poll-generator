@@ -28,7 +28,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { jiraService } from '../services/jiraService';
 
 export const PBRQueue: React.FC = () => {
-  const { queue, removeFromQueue } = useQueue();
+  const { queue, removeTicketFromGlobalQueue } = useQueue();
   const [isConfluenceDialogOpen, setIsConfluenceDialogOpen] = useState(false);
   const [confluencePageUrl, setConfluencePageUrl] = useState('');
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
@@ -117,14 +117,14 @@ export const PBRQueue: React.FC = () => {
                   <TableCell>{ticket.summary}</TableCell>
                   <TableCell>{ticket.type}</TableCell>
                   <TableCell>{ticket.status}</TableCell>
-                  <TableCell>{ticket.labels.join(', ')}</TableCell>
+                  <TableCell>{ticket.labels?.join(', ') || ''}</TableCell>
                   <TableCell>
-                    {ticket.fixVersions.map(v => v.name).join(', ')}
+                    {ticket.fixVersions?.map(v => v.name).join(', ') || ''}
                   </TableCell>
                   <TableCell>
                     <IconButton
                       size="small"
-                      onClick={() => removeFromQueue(ticket.key)}
+                      onClick={() => removeTicketFromGlobalQueue(ticket.key)}
                       color="error"
                     >
                       <DeleteIcon />

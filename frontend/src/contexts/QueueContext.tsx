@@ -1,57 +1,60 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { JiraTicket } from '../services/jiraService';
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { JiraTicket } from '../types/planningPoker'; // Use the type from planningPoker for consistency
+import { planningPokerWsService } from '../services/planningPokerWebsocketService';
 
 interface QueueContextType {
   queue: JiraTicket[];
-  addToQueue: (tickets: JiraTicket[]) => void;
-  removeFromQueue: (ticketKey: string) => void;
-  clearQueue: () => void;
+  setLiveQueue: (newQueue: JiraTicket[]) => void; // For WebSocket service to update the queue
+  addTicketsToGlobalQueue: (tickets: JiraTicket[]) => void;
+  removeTicketFromGlobalQueue: (ticketKey: string) => void;
+  clearGlobalQueue: () => void;
 }
-
-const STORAGE_KEY = 'pbr_queue';
 
 const QueueContext = createContext<QueueContextType>({
   queue: [],
-  addToQueue: () => {},
-  removeFromQueue: () => {},
-  clearQueue: () => {},
+  setLiveQueue: () => {},
+  addTicketsToGlobalQueue: () => {},
+  removeTicketFromGlobalQueue: () => {},
+  clearGlobalQueue: () => {},
 });
 
 export const useQueue = () => useContext(QueueContext);
 
 export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [queue, setQueue] = useState<JiraTicket[]>(() => {
-    // Load initial state from localStorage
-    const savedQueue = localStorage.getItem(STORAGE_KEY);
-    return savedQueue ? JSON.parse(savedQueue) : [];
-  });
+  const [queue, setQueue] = useState<JiraTicket[]>([]); // Initial state is an empty array
 
-  // Save to localStorage whenever queue changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(queue));
-  }, [queue]);
+  // This function will be called by the WebSocket event handler in PlanningPoker.tsx
+  // when 'server.pbrQueue.updated' is received.
+  const setLiveQueue = useCallback((newQueue: JiraTicket[]) => {
+    console.log('[QueueContext] setLiveQueue called. New queue length:', newQueue.length, 'New queue:', newQueue);
+    setQueue(newQueue);
+  }, []);
 
-  const addToQueue = (tickets: JiraTicket[]) => {
-    setQueue(prev => {
-      // Filter out tickets that are already in the queue
-      const newTickets = tickets.filter(
-        newTicket => !prev.some(existingTicket => existingTicket.key === newTicket.key)
-      );
-      return [...prev, ...newTickets];
-    });
+  const addTicketsToGlobalQueue = (tickets: JiraTicket[]) => {
+    // No direct state update here. Emit event to server.
+    // The server will broadcast 'server.pbrQueue.updated', which will call setLiveQueue.
+    planningPokerWsService.emitAddTicketsToGlobalQueue(tickets);
   };
 
-  const removeFromQueue = (ticketKey: string) => {
-    setQueue(prev => prev.filter(ticket => ticket.key !== ticketKey));
+  const removeTicketFromGlobalQueue = (ticketKey: string) => {
+    planningPokerWsService.emitRemoveTicketFromGlobalQueue(ticketKey);
   };
 
-  const clearQueue = () => {
-    setQueue([]);
+  const clearGlobalQueue = () => {
+    planningPokerWsService.emitClearGlobalPbrQueue();
   };
 
   return (
-    <QueueContext.Provider value={{ queue, addToQueue, removeFromQueue, clearQueue }}>
+    <QueueContext.Provider
+      value={{
+        queue,
+        setLiveQueue,
+        addTicketsToGlobalQueue,
+        removeTicketFromGlobalQueue,
+        clearGlobalQueue
+      }}
+    >
       {children}
     </QueueContext.Provider>
   );
-}; 
+};

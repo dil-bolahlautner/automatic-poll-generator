@@ -1,5 +1,5 @@
 import 'dotenv/config';
-
+import http from 'http'; // Import http module
 import express from 'express';
 import cors from 'cors';
 
@@ -10,6 +10,8 @@ import { jiraRouter } from './routes/jira';
 import { teamsRouter } from './routes/teams';
 import { errorHandler } from './middleware/errorHandler';
 import confluenceRoutes from './routes/confluence';
+import WebSocketService from './services/websocketService'; // Import WebSocketService
+import { planningPokerService } from './services/planningPokerService'; // Import planningPokerService singleton
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -31,6 +33,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(port, () => {
+// Create HTTP server and integrate WebSocketService
+const httpServer = http.createServer(app);
+const wsService = new WebSocketService(httpServer, planningPokerService);
+planningPokerService.setWebSocketService(wsService); // Inject WebSocketService into PlanningPokerService
+
+httpServer.listen(port, () => {
   console.log(`Server is running on port ${port}`);
-}); 
+  console.log(`WebSocket server initialized and attached to HTTP server.`);
+});

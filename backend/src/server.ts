@@ -18,31 +18,53 @@ import WebSocketService from './services/websocketService';
 import { planningPokerService } from './services/planningPokerService';
 
 // Load environment variables from .env file
+console.log('Loading environment variables...');
 dotenv.config();
 
 // Debug: Log environment variables (safely)
 console.log('Environment Variables:');
-console.log('CONFLUENCE_USERNAME:', process.env.CONFLUENCE_USERNAME);
-console.log('CONFLUENCE_API_TOKEN:', process.env.CONFLUENCE_API_TOKEN ? '***' : undefined);
+console.log('PORT:', process.env.PORT);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('JIRA_HOST:', process.env.JIRA_HOST);
+console.log('CONFLUENCE_HOST:', process.env.CONFLUENCE_HOST);
+console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID);
 
-// Initialize Express application and HTTP server
-const app = express();
-const httpServer = createServer(app);
+try {
+  // Initialize Express application and HTTP server
+  console.log('Initializing Express application...');
+  const app = express();
+  const httpServer = createServer(app);
 
-// Configure middleware
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Parse JSON request bodies
+  // Configure middleware
+  console.log('Configuring middleware...');
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }));
+  app.use(express.json());
 
-// Register API routes
-app.use('/api/jira', jiraRouter); // Jira integration endpoints
-app.use('/api/confluence', confluenceRoutes); // Confluence integration endpoints
-app.use('/api/teams', teamsRouter); // Teams integration endpoints
+  // Register API routes
+  console.log('Registering API routes...');
+  app.use('/api/jira', jiraRouter);
+  app.use('/api/confluence', confluenceRoutes);
+  app.use('/api/teams', teamsRouter);
 
-// Initialize and wire up Planning Poker services
-const wsService = new WebSocketService(httpServer, planningPokerService);
-planningPokerService.setWebSocketService(wsService);
+  // Initialize and wire up Planning Poker services
+  console.log('Initializing WebSocket service...');
+  const wsService = new WebSocketService(httpServer, planningPokerService);
+  planningPokerService.setWebSocketService(wsService);
 
-console.log('New Planning Poker WebSocketService initialized.');
+  // Start the server
+  const PORT = process.env.PORT || 3001;
+  httpServer.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  });
+} catch (error) {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+}
 
 // --- OLD WebSocket Logic (Commented out as new system should replace it for Planning Poker) ---
 /*
@@ -267,10 +289,4 @@ io.on('connection', (socket) => {
   });
 });
 */
-// --- End of OLD WebSocket Logic ---
-
-// Start server
-const PORT = process.env.PORT || 3001; // Changed port to 3001 to avoid conflict if old server runs on 3000
-httpServer.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-}); 
+// --- End of OLD WebSocket Logic --- 

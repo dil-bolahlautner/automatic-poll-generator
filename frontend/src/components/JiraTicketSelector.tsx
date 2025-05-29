@@ -9,7 +9,7 @@
  * - Sort and filter tickets by various criteria
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react'; // Added useEffect
 import {
   Box,
   Typography,
@@ -48,7 +48,9 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SearchIcon from '@mui/icons-material/Search';
 import { useJira } from '../contexts/JiraContext';
-import { JiraTicket, FixVersion, jiraService } from '../services/jiraService';
+import { JiraTicket as JiraServiceTicket, FixVersion, jiraService, Sprint } from '../services/jiraService'; // Renamed to avoid conflict, added Sprint
+import { JiraTicket as PokerJiraTicket } from '../types/planningPoker'; // For the queue
+import { planningPokerWsService } from '../services/planningPokerWebsocketService'; // Import the service
 import { usePersistedState } from '../hooks/usePersistedState';
 import { confluenceService } from '../services/confluenceService';
 import { useSelectedTickets } from '../contexts/SelectedTicketsContext';
@@ -60,7 +62,7 @@ import { SelectChangeEvent } from '@mui/material';
 type Order = 'asc' | 'desc';
 
 interface HeadCell {
-  id: keyof JiraTicket | 'milestone';
+  id: keyof JiraServiceTicket | 'milestone'; // Use JiraServiceTicket for table head
   label: string;
   sortable: boolean;
   filterable: boolean;
@@ -87,10 +89,10 @@ export const JiraTicketSelector: React.FC = () => {
   const { tickets = [], total = 0, fixVersions = [], isLoading, error: jiraError } = useJira();
   const [selectedVersions, setSelectedVersions] = usePersistedState<string[]>('selectedVersions', []);
   const [isVersionsExpanded, setIsVersionsExpanded] = usePersistedState<boolean>('isVersionsExpanded', false);
-  const { selectedTickets, setSelectedTickets } = useSelectedTickets();
-  const { queue, addToQueue } = useQueue();
+  const { selectedTickets, setSelectedTickets } = useSelectedTickets(); // This context might also need review if it stores tickets for long
+  const { queue, addTicketsToGlobalQueue } = useQueue(); // Use the new method name
   const [selectedTicketKeys, setSelectedTicketKeys] = useState<Set<string>>(new Set());
-  const [orderBy, setOrderBy] = usePersistedState<keyof JiraTicket | 'milestone'>('orderBy', 'key');
+  const [orderBy, setOrderBy] = usePersistedState<keyof JiraServiceTicket | 'milestone'>('orderBy', 'key'); // Use JiraServiceTicket
   const [order, setOrder] = usePersistedState<Order>('order', 'asc');
   const [filters, setFilters] = usePersistedState<Record<string, string>>('filters', {});
   const [isConfluenceDialogOpen, setIsConfluenceDialogOpen] = useState(false);
@@ -98,6 +100,23 @@ export const JiraTicketSelector: React.FC = () => {
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
   const [confluenceError, setConfluenceError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(planningPokerWsService.isConnected());
+
+  useEffect(() => {
+    // Check connection status periodically
+    // This is a simple way to react to connection changes without complex event plumbing
+    // from the service for this specific component's need.
+    const intervalId = setInterval(() => {
+      const currentWsStatus = planningPokerWsService.isConnected();
+      if (currentWsStatus !== isWsConnected) {
+        setIsWsConnected(currentWsStatus);
+      }
+    }, 1000); // Check every second
+
+    return () => {
+      clearInterval(intervalId); // Cleanup on component unmount
+    };
+  }, [isWsConnected]);
 
   /**
    * Toggles the selection of a fix version and clears filters
@@ -149,7 +168,7 @@ export const JiraTicketSelector: React.FC = () => {
    * Handles sorting of tickets by a specific property
    * @param property - The property to sort by
    */
-  const handleRequestSort = (property: keyof JiraTicket | 'milestone') => {
+  const handleRequestSort = (property: keyof JiraServiceTicket | 'milestone') => { // Use JiraServiceTicket
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
@@ -182,7 +201,7 @@ export const JiraTicketSelector: React.FC = () => {
    * @param ticket - The ticket to extract milestone from
    * @returns The milestone value or 'N/A' if not found
    */
-  const getMilestoneValue = (ticket: JiraTicket) => {
+  const getMilestoneValue = (ticket: JiraServiceTicket) => { // Use JiraServiceTicket
     if (!ticket.parent) return 'N/A';
     const match = ticket.parent.summary.match(/\[(M[^\]]*)\]/);
     return match ? match[1] : 'NM';
@@ -193,7 +212,7 @@ export const JiraTicketSelector: React.FC = () => {
    * @param tickets - The tickets to analyze
    * @returns Object containing arrays of distinct values for each filter type
    */
-  const getDistinctValues = (tickets: JiraTicket[]) => {
+  const getDistinctValues = (tickets: JiraServiceTicket[]) => { // Use JiraServiceTicket
     const values: Record<string, Set<string>> = {
       milestone: new Set(),
       status: new Set(),
@@ -266,7 +285,7 @@ export const JiraTicketSelector: React.FC = () => {
           const selectedLabels = value.split(',');
           return selectedLabels.some(label => ticket.labels.includes(label));
         }
-        const fieldValue = ticket[property as keyof JiraTicket];
+        const fieldValue = ticket[property as keyof JiraServiceTicket]; // Use JiraServiceTicket
         return String(fieldValue).toLowerCase().includes(value.toLowerCase());
       });
     });
@@ -280,8 +299,8 @@ export const JiraTicketSelector: React.FC = () => {
         aValue = getMilestoneValue(a);
         bValue = getMilestoneValue(b);
       } else {
-        aValue = String(a[orderBy as keyof JiraTicket]);
-        bValue = String(b[orderBy as keyof JiraTicket]);
+        aValue = String(a[orderBy as keyof JiraServiceTicket]); // Use JiraServiceTicket
+        bValue = String(b[orderBy as keyof JiraServiceTicket]); // Use JiraServiceTicket
       }
 
       if (order === 'asc') {
@@ -313,9 +332,21 @@ export const JiraTicketSelector: React.FC = () => {
   };
 
   const handleAddToPBRQueue = () => {
-    const selectedTicketsList = filteredTickets.filter(ticket => selectedTicketKeys.has(ticket.key));
-    addToQueue(selectedTicketsList);
-    setSelectedTicketKeys(new Set());
+    const rawSelectedTickets = filteredTickets.filter(ticket => selectedTicketKeys.has(ticket.key));
+    
+    // Transform to PokerJiraTicket, ensuring 'url' is present and other fields match
+    const ticketsForPokerQueue: PokerJiraTicket[] = rawSelectedTickets.map(ticket => ({
+      key: ticket.key,
+      summary: ticket.summary,
+      description: (ticket as any).description || undefined, // Assuming description might be missing on JiraServiceTicket
+      url: jiraService.getTicketUrl(ticket.key), // Populate the URL
+      type: ticket.type,
+      status: ticket.status,
+      // Ensure other optional fields from PokerJiraTicket are handled if necessary
+    }));
+
+    addTicketsToGlobalQueue(ticketsForPokerQueue);
+    setSelectedTicketKeys(new Set()); // Clear local selection after adding to global queue
   };
 
   const isInQueue = (ticketKey: string) => {
@@ -404,7 +435,7 @@ export const JiraTicketSelector: React.FC = () => {
             variant="contained"
             size="small"
             onClick={handleAddToPBRQueue}
-            disabled={selectedTicketKeys.size === 0}
+            disabled={selectedTicketKeys.size === 0 || !isWsConnected}
             fullWidth={false}
           >
             Add to PBR Queue
@@ -690,7 +721,7 @@ export const JiraTicketSelector: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredTickets.map((ticket: JiraTicket) => {
+            {filteredTickets.map((ticket: JiraServiceTicket) => {
               const isInQueue = queue.some(t => t.key === ticket.key);
               return (
                 <TableRow 
@@ -899,7 +930,7 @@ export const JiraTicketSelector: React.FC = () => {
                         }
                       }}
                     >
-                      {ticket.blockingIssues.map((blocking) => (
+                      {ticket.blockingIssues.map((blocking: { key: string; summary: string; status: string; type: string; }) => (
                         <Link
                           key={blocking.key}
                           href={jiraService.getTicketUrl(blocking.key)}

@@ -16,7 +16,15 @@ import { JiraTicket } from '../types/planningPoker'; // Assuming JiraTicket migh
  */
 interface CreateSessionPayload {
   hostName: string;
-  tickets: JiraTicket[]; // From frontend queue
+  // tickets: JiraTicket[]; // Tickets will now come from the globalPbrQueue on the backend
+}
+
+interface AddToPbrQueuePayload {
+  tickets: JiraTicket[];
+}
+
+interface RemoveFromPbrQueuePayload {
+  ticketKey: string;
 }
 
 interface JoinSessionPayload {
@@ -50,9 +58,17 @@ class WebSocketService {
    */
   constructor(server: HttpServer, pokerServiceInstance: PlanningPokerService) {
     this.pokerService = pokerServiceInstance;
+    const allowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+    if (process.env.FRONTEND_URL) {
+      // Add the environment variable URL if it's not already in the list
+      if (!allowedOrigins.includes(process.env.FRONTEND_URL)) {
+        allowedOrigins.push(process.env.FRONTEND_URL);
+      }
+    }
+
     this.io = new Server(server, {
       cors: {
-        origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:5173'], // Allow common dev ports
+        origin: allowedOrigins,
         methods: ['GET', 'POST'],
       },
       path: '/socket.io/', // Explicitly set the default path on the server too
@@ -71,7 +87,51 @@ class WebSocketService {
       // User's actual name/ID might come with join/create messages
       console.log(`User connected with socket ID: ${socketId}`);
 
-      // --- Planning Poker Event Handlers ---
+      // Send current global PBR queue to the newly connected client
+      try {
+        const currentGlobalQueue = this.pokerService.getGlobalPbrQueue();
+        socket.emit('server.pbrQueue.updated', currentGlobalQueue);
+      } catch (error) {
+        console.error(`Error sending initial global PBR queue to ${socketId}:`, error);
+        // Optionally emit an error to the client if this is critical
+      }
+      
+      // --- Global PBR Queue Event Handlers ---
+
+      socket.on('client.pbrQueue.add', (payload: AddToPbrQueuePayload) => {
+        console.log(`Received client.pbrQueue.add from ${socketId}:`, payload);
+        try {
+          this.pokerService.addTicketsToGlobalPbrQueue(payload.tickets);
+          // pokerService will trigger broadcast via broadcastGlobalPbrQueueUpdate
+        } catch (error: any) {
+          console.error(`Error adding tickets to global PBR queue for ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to add tickets to PBR queue: ' + error.message });
+        }
+      });
+
+      socket.on('client.pbrQueue.remove', (payload: RemoveFromPbrQueuePayload) => {
+        console.log(`Received client.pbrQueue.remove from ${socketId}:`, payload);
+        try {
+          this.pokerService.removeTicketFromGlobalPbrQueue(payload.ticketKey);
+          // pokerService will trigger broadcast
+        } catch (error: any) {
+          console.error(`Error removing ticket from global PBR queue for ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to remove ticket from PBR queue: ' + error.message });
+        }
+      });
+
+      socket.on('client.pbrQueue.clear', () => {
+        console.log(`Received client.pbrQueue.clear from ${socketId}`);
+        try {
+          this.pokerService.clearGlobalPbrQueue();
+          // pokerService will trigger broadcast
+        } catch (error: any) {
+          console.error(`Error clearing global PBR queue for ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to clear PBR queue: ' + error.message });
+        }
+      });
+      
+      // --- Planning Poker Session Event Handlers ---
 
       /**
        * Handles session creation requests
@@ -80,7 +140,8 @@ class WebSocketService {
       socket.on('createSession', (payload: CreateSessionPayload) => {
         console.log(`Received createSession from ${socketId}:`, payload);
         try {
-          const session = this.pokerService.createSession(payload.hostName, payload.tickets, socketId);
+          // Tickets are no longer passed from client; pokerService uses its globalPbrQueue
+          const session = this.pokerService.createSession(payload.hostName, socketId);
           // The pokerService's createSession method should handle broadcasting/notifying the host.
           // If direct feedback is needed here:
           // socket.emit('sessionCreated', session); // Send full session state back to host
@@ -100,8 +161,10 @@ class WebSocketService {
           const session = this.pokerService.joinSession(payload.sessionId, payload.userName, socketId);
           if (session) {
             socket.join(payload.sessionId); // Join the socket.io room for this session
-            // pokerService's joinSession should handle broadcasting updates.
-            // socket.emit('sessionJoined', session); // Send full session state to joining user
+            // Send session update to the joining user
+            socket.emit('sessionJoined', session);
+            // Broadcast to all users in the session
+            this.io.to(payload.sessionId).emit('sessionUpdate', session);
           } else {
             socket.emit('error', { message: `Failed to join session ${payload.sessionId}. Session not found or user already in session.` });
           }
@@ -123,6 +186,30 @@ class WebSocketService {
         } catch (error: any) {
           console.error(`Error submitting vote for ${socketId} in session ${payload.sessionId}:`, error);
           socket.emit('error', { message: 'Failed to submit vote: ' + error.message });
+        }
+      });
+
+      socket.on('clearSession', (payload: { sessionId: string }) => {
+        console.log(`Received clearSession from ${socketId}:`, payload);
+        try {
+          this.pokerService.clearSession(payload.sessionId, socketId);
+          // The session will be deleted and all users will be notified
+        } catch (error: any) {
+          console.error(`Error clearing session ${payload.sessionId} by ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to clear session: ' + error.message });
+        }
+      });
+
+      socket.on('leaveSession', (payload: { sessionId: string }) => {
+        console.log(`Received leaveSession from ${socketId}:`, payload);
+        try {
+          this.pokerService.leaveSession(payload.sessionId, socketId);
+          socket.leave(payload.sessionId);
+          // Send confirmation to the user
+          socket.emit('sessionLeft', { sessionId: payload.sessionId });
+        } catch (error: any) {
+          console.error(`Error leaving session ${payload.sessionId} by ${socketId}:`, error);
+          socket.emit('error', { message: 'Failed to leave session: ' + error.message });
         }
       });
 
@@ -148,8 +235,14 @@ class WebSocketService {
       socket.on('startVoting', (payload: HostActionPayload) => {
         console.log(`Received startVoting from ${socketId}:`, payload);
         try {
-          this.pokerService.startVoting(payload.sessionId, socketId, payload.ticketKey);
-          // pokerService's startVoting handles broadcasting.
+          const updatedSession = this.pokerService.startVoting(payload.sessionId, socketId, payload.ticketKey);
+          if (updatedSession) {
+            // Broadcast the session update to all users in the session
+            this.io.to(payload.sessionId).emit('sessionUpdated', updatedSession);
+            console.log(`Broadcasted session update after starting voting for session ${payload.sessionId}`);
+          } else {
+            socket.emit('error', { message: 'Failed to start voting: Invalid session or not host' });
+          }
         } catch (error: any) {
           console.error(`Error starting voting for ${socketId} in session ${payload.sessionId}:`, error);
           socket.emit('error', { message: 'Failed to start voting: ' + error.message });
@@ -232,6 +325,16 @@ class WebSocketService {
     } else {
       console.warn(`Socket ${socketId} not found, cannot leave room ${roomId}`);
     }
+  }
+
+  /**
+   * Broadcasts the updated global PBR queue to all connected clients.
+   * This method is called by PlanningPokerService after the queue is modified.
+   * @param queue - The updated global PBR queue.
+   */
+  public broadcastGlobalPbrQueueUpdate(queue: JiraTicket[]): void {
+    console.log('Broadcasting server.pbrQueue.updated to all clients.');
+    this.io.emit('server.pbrQueue.updated', queue);
   }
 }
 

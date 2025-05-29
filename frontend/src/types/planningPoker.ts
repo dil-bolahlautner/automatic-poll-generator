@@ -13,8 +13,32 @@ export interface JiraTicket {
   summary: string;
   description?: string;
   url: string;
-  type?: string;
-  status?: string;
+  type: string;
+  status: string;
+  labels: string[];
+  reporter?: string;
+  assignee?: string;
+  parent?: {
+    key: string;
+    summary: string;
+    type?: string;
+  };
+  fixVersions: {
+    id: string;
+    name: string;
+    released: boolean;
+  }[];
+  linkedIssues: {
+    type: string;
+    key: string;
+    direction: 'inward' | 'outward';
+  }[];
+  blockingIssues: {
+    key: string;
+    summary: string;
+    status: string;
+    type: string;
+  }[];
 }
 
 export interface PlanningPokerSession {
@@ -31,6 +55,11 @@ export interface PlanningPokerSession {
 // Websocket event payloads (examples, might need more based on implementation)
 export interface SessionCreatedPayload extends PlanningPokerSession {}
 export interface SessionUpdatedPayload extends PlanningPokerSession {}
+
+export interface SessionTerminatedPayload {
+  sessionId: string;
+  reason: string;
+}
 
 export interface ErrorPayload {
   message: string;

@@ -8,11 +8,14 @@ import WebSocketService from './websocketService';
 
 export class PlanningPokerService {
   private sessions: Map<string, PlanningPokerSession> = new Map();
+  private globalPbrQueue: JiraTicket[] = [];
   private webSocketService!: WebSocketService; // Will be set by setWebSocketService
 
   // Constructor can be kept simple or removed if not doing other setup
   constructor() {
-    console.log('PlanningPokerService initialized. Waiting for WebSocketService.');
+    this.sessions = new Map(); // Explicitly clear/re-initialize sessions on instantiation
+    this.globalPbrQueue = []; // Initialize global PBR queue
+    console.log('PlanningPokerService initialized. Sessions and Global PBR Queue cleared. Waiting for WebSocketService.');
   }
 
   public setWebSocketService(wsService: WebSocketService): void {
@@ -26,11 +29,72 @@ export class PlanningPokerService {
     }
   }
 
-  public createSession(hostName: string, initialTickets: JiraTicket[], hostWsId: string): PlanningPokerSession {
+  private isUserInAnySession(userId: string): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.users.some(u => u.id === userId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // --- Global PBR Queue Management ---
+  public getGlobalPbrQueue(): JiraTicket[] {
+    // Return a copy to prevent direct modification of the internal array
+    return [...this.globalPbrQueue];
+  }
+
+  public addTicketsToGlobalPbrQueue(ticketsToAdd: JiraTicket[]): JiraTicket[] {
+    const newTickets = ticketsToAdd.filter(
+      newTicket => !this.globalPbrQueue.some(existingTicket => existingTicket.key === newTicket.key)
+    );
+    this.globalPbrQueue.push(...newTickets);
+    console.log(`Added ${newTickets.length} tickets to Global PBR Queue. Current size: ${this.globalPbrQueue.length}`);
+    this.webSocketService.broadcastGlobalPbrQueueUpdate(this.globalPbrQueue);
+    return [...this.globalPbrQueue];
+  }
+
+  public removeTicketFromGlobalPbrQueue(ticketKeyToRemove: string): JiraTicket[] {
+    const initialLength = this.globalPbrQueue.length;
+    this.globalPbrQueue = this.globalPbrQueue.filter(ticket => ticket.key !== ticketKeyToRemove);
+    if (this.globalPbrQueue.length < initialLength) {
+      console.log(`Removed ticket ${ticketKeyToRemove} from Global PBR Queue. Current size: ${this.globalPbrQueue.length}`);
+      this.webSocketService.broadcastGlobalPbrQueueUpdate(this.globalPbrQueue);
+    }
+    return [...this.globalPbrQueue];
+  }
+
+  public clearGlobalPbrQueue(): JiraTicket[] {
+    this.globalPbrQueue = [];
+    console.log('Global PBR Queue cleared.');
+    this.webSocketService.broadcastGlobalPbrQueueUpdate(this.globalPbrQueue);
+    return [...this.globalPbrQueue];
+  }
+
+  // --- Session Management ---
+  public createSession(hostName: string, hostWsId: string): PlanningPokerSession {
     this.ensureWebSocketService();
+    
+    // Use a snapshot of the current global PBR queue for the session
+    const initialTickets = [...this.globalPbrQueue];
+    // Consider if the globalPbrQueue should be cleared after session creation.
+    // For now, it's not cleared, allowing multiple sessions to be created from the same queue
+    // or for the queue to persist for other potential uses.
+    // If it should be cleared, add: this.clearGlobalPbrQueue();
+
+    if (initialTickets.length === 0) {
+      throw new Error('Cannot create a session with an empty PBR queue.');
+    }
+
+    // Check if user is already in a session
+    if (this.isUserInAnySession(hostWsId)) {
+      console.warn(`User ${hostName} (${hostWsId}) attempted to create a session while already in one`);
+      throw new Error('You are already in a session. Please leave the current session before creating a new one.');
+    }
+
     const sessionId = uuidv4();
     const host: PlanningPokerUser = {
-      id: hostWsId, // Use WebSocket connection ID or a generated UUID
+      id: hostWsId,
       name: hostName,
       isHost: true,
       hasVoted: false,
@@ -49,17 +113,11 @@ export class PlanningPokerService {
 
     this.sessions.set(sessionId, session);
     console.log(`Planning Poker session created: ${sessionId} by host ${hostName} (${host.id})`);
-    // Notify host about successful session creation
-    // The WebSocketService's 'createSession' handler already has the socket, so it can emit directly.
-    // However, if we want pokerService to explicitly push, it can.
-    // Let's assume WebSocketService handles the initial emit upon receiving 'createSession'
-    // and pokerService is responsible for subsequent broadcasts.
-    // For now, let's make pokerService responsible for sending the confirmation.
+    
     const hostState = this.getSessionStateForUser(session, host.id);
     if (hostState) {
-        this.webSocketService.sendToSocket(host.id, 'sessionCreated', hostState);
-        // The host's socket also needs to join the session room
-        this.webSocketService.joinRoom(host.id, sessionId);
+      this.webSocketService.sendToSocket(host.id, 'sessionCreated', hostState);
+      this.webSocketService.joinRoom(host.id, sessionId);
     }
     return hostState!;
   }
@@ -120,30 +178,49 @@ export class PlanningPokerService {
     session.users.splice(userIndex, 1);
     console.log(`User ${leavingUser.name} (${userId}) left session: ${sessionId}`);
 
+    // Check if the leaving user was the host
+    if (leavingUser.isHost) {
+      if (session.users.length > 0) {
+        // Host left, but other users remain. Terminate the session for everyone.
+        console.log(`Host ${leavingUser.name} (${userId}) left session ${sessionId}. Terminating session as host departed.`);
+        // Notify remaining users BEFORE deleting the session data
+        session.users.forEach(remainingUser => {
+          // ensureWebSocketService() was called at the start of leaveSession,
+          // so this.webSocketService should be initialized.
+          this.webSocketService.sendToSocket(remainingUser.id, 'sessionTerminated', {
+            sessionId: session.id,
+            reason: 'The host has left the session.'
+          });
+        });
+        this.sessions.delete(sessionId);
+        // For an explicit leave action by the host (not a disconnect),
+        // we could send a confirmation to the leaving host's client.
+        // e.g., this.webSocketService.sendToSocket(userId, 'sessionActionConfirmation', { status: 'success', message: 'You left as host, session ended.' });
+        return; // Session processing stops here as it's deleted.
+      } else {
+        // Host left and was the only user. The session is now empty.
+        // It will be deleted by the common logic below.
+        console.log(`Host ${leavingUser.name} (${userId}) left session ${sessionId}. Session was already empty and is being deleted.`);
+      }
+    }
+
+    // If session becomes empty (either the leaving user was the last one, host or not)
+    // This handles:
+    // - A non-host leaves and is the last user.
+    // - The host leaves and was the last user (after the 'isHost' block above).
     if (session.users.length === 0) {
-      console.log(`Session ${sessionId} is empty, deleting.`);
+      console.log(`Session ${sessionId} is empty after user ${leavingUser.name} (${userId}) left, deleting.`);
       this.sessions.delete(sessionId);
-      // Optionally notify other services or clean up resources
-      // No broadcast needed if session is deleted.
       return;
     }
 
-    // If host leaves, a new host could be assigned or session ended.
-    // For now, if host leaves, we'll just update. This needs more robust handling.
-    if (leavingUser.isHost && session.users.length > 0) {
-      // Simple: make the next user the host. Or end session.
-      // session.users[0].isHost = true;
-      // session.hostId = session.users[0].id;
-      // console.log(`New host for session ${sessionId}: ${session.users[0].name} (${session.users[0].id})`);
-      // For now, let's assume host leaving might end the session or require manual intervention.
-      // This part of logic needs to be defined by product requirements.
-      console.warn(`Host ${leavingUser.name} left session ${sessionId}. Session may become unmanageable without a host.`);
-    }
-
+    // If we reach here, it means a non-host user left, and other users still remain in the session.
+    // The session object (user list) has been modified by splice.
+    // We need to persist this change if the session itself wasn't deleted.
     this.sessions.set(sessionId, session);
+    this.broadcastSessionUpdate(sessionId); // Notify remaining users in the session about the change (e.g., user left)
     // User automatically leaves all rooms on disconnect by socket.io
     // If we need to manually make them leave the room: this.webSocketService.leaveRoom(userId, sessionId);
-    this.broadcastSessionUpdate(sessionId);
   }
 
   public startVoting(sessionId: string, hostId: string, ticketKeyToStart?: string): PlanningPokerSession | null {
@@ -188,14 +265,16 @@ export class PlanningPokerService {
       return null;
     }
 
+    // Update user's vote
     user.vote = voteValue;
     user.hasVoted = true;
     this.sessions.set(sessionId, session);
     console.log(`User ${user.name} (${userId}) voted ${voteValue} for ticket ${session.currentTicketKey} in session ${sessionId}`);
 
-    // Notify host about vote status, and user about their vote confirmation.
-    // Other users should not see the vote value yet.
-    this.broadcastSessionUpdate(sessionId); // This will send tailored states
+    // Broadcast session update to all users
+    this.broadcastSessionUpdate(sessionId);
+    
+    // Return the session state tailored for the voting user
     return this.getSessionStateForUser(session, userId);
   }
 
@@ -251,6 +330,22 @@ export class PlanningPokerService {
     return this.getSessionStateForUser(session, hostId);
   }
 
+  public clearSession(sessionId: string, hostId: string): void {
+    this.ensureWebSocketService();
+    const session = this.sessions.get(sessionId);
+    if (!session || session.hostId !== hostId) {
+      console.warn(`Invalid attempt to clear session ${sessionId} by user ${hostId}`);
+      return;
+    }
+
+    // Notify all users that the session is being cleared
+    this.broadcastSessionUpdate(sessionId);
+    
+    // Remove the session
+    this.sessions.delete(sessionId);
+    console.log(`Session ${sessionId} cleared by host ${hostId}`);
+  }
+
   public getSession(sessionId: string): PlanningPokerSession | null {
     return this.sessions.get(sessionId) || null;
   }
@@ -279,26 +374,26 @@ export class PlanningPokerService {
     if (!session) return null;
 
     const requestingUser = session.users.find(u => u.id === userId);
-    if (!requestingUser) return null; // Should not happen if userId is from session.users
+    if (!requestingUser) return null;
 
-    // Deep clone session to avoid modifying the original in-memory session object
+    // Deep clone session to avoid modifying the original
     const sessionStateForUser = JSON.parse(JSON.stringify(session)) as PlanningPokerSession;
 
-    // If votes are not revealed, non-host users should not see others' votes.
-    // Host can see who has voted, but not their actual votes until revealed.
+    // If votes are not revealed, handle vote visibility
     if (!sessionStateForUser.votesRevealed) {
       sessionStateForUser.users.forEach(u => {
-        if (u.id !== userId && !requestingUser.isHost) {
-          // Other users' votes are hidden from non-hosts
-          u.vote = u.hasVoted ? 'VOTED' : null; // Show 'VOTED' or null, not the actual vote
-        } else if (u.id !== userId && requestingUser.isHost) {
-          // Host sees who has voted, but not the actual vote value
-           u.vote = u.hasVoted ? 'VOTED' : null;
+        if (u.id !== userId) {
+          // For non-hosts, only show if others have voted
+          if (!requestingUser.isHost) {
+            u.vote = u.hasVoted ? 'VOTED' : null;
+          } else {
+            // Host sees who has voted but not the actual vote value
+            u.vote = u.hasVoted ? 'VOTED' : null;
+          }
         }
-        // Users always see their own vote, hosts always see their own vote
+        // Users always see their own vote
       });
     }
-    // If votes ARE revealed, everyone sees all votes (default behavior of JSON.parse(JSON.stringify(session)))
 
     return sessionStateForUser;
   }
