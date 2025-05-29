@@ -53,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const { tickets } = useJira();
-  const { queue, addToQueue } = useQueue();
+  const { queue } = useQueue();
 
   const menuItems = [
     { text: 'JIRA Tickets', icon: <BugReportIcon />, path: '/' },
@@ -76,12 +76,6 @@ export function Layout({ children }: LayoutProps) {
 
   const handleDrawerCollapse = () => {
     setIsDrawerCollapsed(!isDrawerCollapsed);
-  };
-
-  const handleAddToPBRQueue = () => {
-    const selectedTicketsList = tickets.filter(ticket => selectedTickets.has(ticket.key));
-    addToQueue(selectedTicketsList);
-    setSelectedTickets(new Set()); // Clear selection after adding to queue
   };
 
   const drawer = (
@@ -161,19 +155,8 @@ export function Layout({ children }: LayoutProps) {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-              Automatic Poll Generator
+              QST Ticket Manager
             </Typography>
-            {location.pathname === '/' && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleAddToPBRQueue}
-                disabled={selectedTickets.size === 0}
-                sx={{ ml: 2 }}
-              >
-                Add to PBR Queue ({selectedTickets.size})
-              </Button>
-            )}
           </Toolbar>
         </AppBar>
         <Box

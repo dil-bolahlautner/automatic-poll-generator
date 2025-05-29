@@ -197,11 +197,12 @@ export function PlanningPoker() {
   }, []);
 
   const handleSessionTerminated = useCallback((payload: SessionTerminatedPayload) => {
-    console.log('Session terminated:', payload);
+    console.log('[PlanningPoker.tsx] Session terminated:', payload);
     setSession(null);
-    setWsError(`Session terminated: ${payload.reason}`);
+    setWsError(`Session ended: ${payload.reason}`);
     setIsLoading(false);
-    // Potentially navigate user or show a more prominent notification
+    // Clear any local state that might be related to the session
+    setMyUserId(null);
   }, []);
 
   // Callback for WebSocket service to update the global PBR queue
@@ -236,7 +237,7 @@ export function PlanningPoker() {
     const handleSessionTerminated = (payload: SessionTerminatedPayload) => {
       console.log('[PlanningPoker.tsx] Session terminated:', payload);
       setSession(null);
-      setWsError(`Session terminated: ${payload.reason}`);
+      setWsError(`Session ended: ${payload.reason}`);
       setIsLoading(false);
     };
 
@@ -407,6 +408,7 @@ export function PlanningPoker() {
     if (session?.id && me?.isHost) {
       setIsLoading(true);
       planningPokerWsService.clearSession(session.id);
+      // The session state will be cleared when we receive the sessionTerminated event
     }
   };
 
@@ -414,6 +416,7 @@ export function PlanningPoker() {
     if (session?.id) {
       setIsLoading(true);
       planningPokerWsService.leaveSession(session.id);
+      // The session state will be cleared when we receive the sessionTerminated event
     }
   };
 
@@ -446,7 +449,13 @@ export function PlanningPoker() {
 
             {wsError && (
               <Fade in={!!wsError}>
-                <Alert severity="error" sx={{ mb: 3 }}>{wsError}</Alert>
+                <Alert 
+                  severity={wsError.includes('left') || wsError.includes('ended') ? 'info' : 'error'} 
+                  sx={{ mb: 3 }}
+                  onClose={() => setWsError(null)}
+                >
+                  {wsError}
+                </Alert>
               </Fade>
             )}
 
@@ -502,50 +511,14 @@ export function PlanningPoker() {
           </StyledPaper>
         </Fade>
 
-        {/* Ticket Queue Display */}
-        <StyledPaper sx={{ mt: 3 }}>
-          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <GroupIcon color="primary" />
-            Global PBR Queue ({globalPbrQueue.length})
+        {/* PBR Queue Info */}
+        <Box sx={{ mt: 3, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            {globalPbrQueue.length > 0 
+              ? `${globalPbrQueue.length} ticket${globalPbrQueue.length === 1 ? '' : 's'} in the PBR Queue`
+              : 'No tickets in the PBR Queue. Add tickets using the Jira Ticket Selector.'}
           </Typography>
-          <List>
-            {globalPbrQueue.map((ticket) => (
-              <ListItem
-                key={ticket.key}
-                sx={{
-                  borderRadius: 1,
-                  mb: 1,
-                  bgcolor: 'background.default',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                }}
-                secondaryAction={
-                  <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveTicketFromQueue(ticket.key)}>
-                    <DeleteIcon />
-                  </IconButton>
-                }
-              >
-                <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                  <Typography variant="subtitle1" component="div">
-                    {ticket.key}
-                  </Typography>
-                  <Box sx={{ mt: 0.5 }}>
-                    <Stack direction="row" spacing={1}>
-                      <Chip size="small" label={ticket.type} />
-                      <Chip size="small" label={ticket.status} color={ticket.status === 'Done' ? 'success' : 'default'} />
-                    </Stack>
-                  </Box>
-                </Box>
-              </ListItem>
-            ))}
-            {globalPbrQueue.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                The Global PBR Queue is empty. Add tickets using the Jira Ticket Selector.
-              </Typography>
-            )}
-          </List>
-        </StyledPaper>
+        </Box>
       </Box>
     );
   }
@@ -704,28 +677,29 @@ export function PlanningPoker() {
               {currentTicket ? (
                 <StyledPaper>
                   <CardContent>
-                    <Typography variant="h5" gutterBottom>
-                      {currentTicket.key}
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary" paragraph>
-                      {currentTicket.summary}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                      <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                        {currentTicket.key}
+                      </Typography>
+                      <Typography variant="body1" color="text.secondary" sx={{ flex: 1 }}>
+                        {currentTicket.summary}
+                      </Typography>
+                      <Button
+                        component="a"
+                        href={currentTicket.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        size="small"
+                      >
+                        View in Jira
+                      </Button>
+                    </Box>
                     {currentTicket.description && (
                       <Typography variant="body2" sx={{ mt: 2, whiteSpace: 'pre-wrap', color: 'text.secondary' }}>
                         {currentTicket.description}
                       </Typography>
                     )}
-                    <Button
-                      component="a"
-                      href={currentTicket.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      variant="outlined"
-                      size="small"
-                      sx={{ mt: 2 }}
-                    >
-                      View in Jira
-                    </Button>
 
                     {/* Voting UI */}
                     <Box sx={{ mt: 4 }}>

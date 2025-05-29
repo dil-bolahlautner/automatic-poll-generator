@@ -92,7 +92,8 @@ export class PlanningPokerService {
       throw new Error('You are already in a session. Please leave the current session before creating a new one.');
     }
 
-    const sessionId = uuidv4();
+    // Generate an 8-digit numeric session ID
+    const sessionId = Math.floor(10000000 + Math.random() * 90000000).toString();
     const host: PlanningPokerUser = {
       id: hostWsId,
       name: hostName,
@@ -178,6 +179,12 @@ export class PlanningPokerService {
     session.users.splice(userIndex, 1);
     console.log(`User ${leavingUser.name} (${userId}) left session: ${sessionId}`);
 
+    // Notify the leaving user that they've been removed from the session
+    this.webSocketService.sendToSocket(userId, 'sessionTerminated', {
+      sessionId: session.id,
+      reason: 'You have left the session.'
+    });
+
     // Check if the leaving user was the host
     if (leavingUser.isHost) {
       if (session.users.length > 0) {
@@ -185,29 +192,22 @@ export class PlanningPokerService {
         console.log(`Host ${leavingUser.name} (${userId}) left session ${sessionId}. Terminating session as host departed.`);
         // Notify remaining users BEFORE deleting the session data
         session.users.forEach(remainingUser => {
-          // ensureWebSocketService() was called at the start of leaveSession,
-          // so this.webSocketService should be initialized.
           this.webSocketService.sendToSocket(remainingUser.id, 'sessionTerminated', {
             sessionId: session.id,
             reason: 'The host has left the session.'
           });
         });
         this.sessions.delete(sessionId);
-        // For an explicit leave action by the host (not a disconnect),
-        // we could send a confirmation to the leaving host's client.
-        // e.g., this.webSocketService.sendToSocket(userId, 'sessionActionConfirmation', { status: 'success', message: 'You left as host, session ended.' });
         return; // Session processing stops here as it's deleted.
       } else {
         // Host left and was the only user. The session is now empty.
-        // It will be deleted by the common logic below.
         console.log(`Host ${leavingUser.name} (${userId}) left session ${sessionId}. Session was already empty and is being deleted.`);
+        this.sessions.delete(sessionId);
+        return;
       }
     }
 
     // If session becomes empty (either the leaving user was the last one, host or not)
-    // This handles:
-    // - A non-host leaves and is the last user.
-    // - The host leaves and was the last user (after the 'isHost' block above).
     if (session.users.length === 0) {
       console.log(`Session ${sessionId} is empty after user ${leavingUser.name} (${userId}) left, deleting.`);
       this.sessions.delete(sessionId);
@@ -215,12 +215,8 @@ export class PlanningPokerService {
     }
 
     // If we reach here, it means a non-host user left, and other users still remain in the session.
-    // The session object (user list) has been modified by splice.
-    // We need to persist this change if the session itself wasn't deleted.
     this.sessions.set(sessionId, session);
-    this.broadcastSessionUpdate(sessionId); // Notify remaining users in the session about the change (e.g., user left)
-    // User automatically leaves all rooms on disconnect by socket.io
-    // If we need to manually make them leave the room: this.webSocketService.leaveRoom(userId, sessionId);
+    this.broadcastSessionUpdate(sessionId); // Notify remaining users in the session about the change
   }
 
   public startVoting(sessionId: string, hostId: string, ticketKeyToStart?: string): PlanningPokerSession | null {
@@ -338,12 +334,17 @@ export class PlanningPokerService {
       return;
     }
 
-    // Notify all users that the session is being cleared
-    this.broadcastSessionUpdate(sessionId);
+    // Notify all users that the session is being terminated
+    session.users.forEach(user => {
+      this.webSocketService.sendToSocket(user.id, 'sessionTerminated', {
+        sessionId: session.id,
+        reason: 'The host has cleared the session.'
+      });
+    });
     
     // Remove the session
     this.sessions.delete(sessionId);
-    console.log(`Session ${sessionId} cleared by host ${hostId}`);
+    console.log(`Session ${sessionId} cleared by host ${hostId}. All users have been notified.`);
   }
 
   public getSession(sessionId: string): PlanningPokerSession | null {

@@ -1,6 +1,6 @@
 {
-  "short_name": "Poll Generator",
-  "name": "Automatic Poll Generator",
+  "short_name": "Ticket Manager",
+  "name": "QST Ticket Manager",
   "icons": [
     {
       "src": "favicon.ico",
