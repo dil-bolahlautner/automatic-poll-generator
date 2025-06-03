@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -26,6 +26,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { jiraService } from '../services/jiraService';
+import { JiraTicket } from '../types/planningPoker';
 
 export const PBRQueue: React.FC = () => {
   const { queue, removeTicketFromGlobalQueue } = useQueue();
@@ -34,6 +35,17 @@ export const PBRQueue: React.FC = () => {
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
   const [confluenceError, setConfluenceError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('PBR Queue Data:', queue.map(ticket => ({
+      key: ticket.key,
+      labels: ticket.labels,
+      fixVersions: ticket.fixVersions,
+      linkedIssues: ticket.linkedIssues,
+      blockingIssues: ticket.blockingIssues
+    })));
+  }, [queue]);
 
   // Get distinct reporters from the queue
   const distinctReporters = useMemo(() => {
@@ -95,6 +107,7 @@ export const PBRQueue: React.FC = () => {
                 <TableCell>Status</TableCell>
                 <TableCell>Labels</TableCell>
                 <TableCell>Fix Versions</TableCell>
+                <TableCell>Depending on</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -117,9 +130,42 @@ export const PBRQueue: React.FC = () => {
                   <TableCell>{ticket.summary}</TableCell>
                   <TableCell>{ticket.type}</TableCell>
                   <TableCell>{ticket.status}</TableCell>
-                  <TableCell>{ticket.labels?.join(', ') || ''}</TableCell>
                   <TableCell>
-                    {ticket.fixVersions?.map(v => v.name).join(', ') || ''}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {ticket.labels?.map((label, index) => (
+                        <Chip
+                          key={index}
+                          label={label}
+                          size="small"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {ticket.fixVersions?.map(v => {
+                      if (v.name.startsWith('QST 4.')) {
+                        return '4.0';
+                      } else if (v.name.startsWith('QST 3.')) {
+                        return '3.x';
+                      }
+                      return v.name;
+                    }).join(', ') || ''}
+                  </TableCell>
+                  <TableCell>
+                    {ticket.blockingIssues?.map(issue => (
+                      <Box key={issue.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <a
+                          href={jiraService.getTicketUrl(issue.key)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          {issue.key}
+                        </a>
+                        <OpenInNewIcon fontSize="small" sx={{ opacity: 0.7 }} />
+                      </Box>
+                    ))}
                   </TableCell>
                   <TableCell>
                     <IconButton
@@ -175,6 +221,8 @@ export const PBRQueue: React.FC = () => {
       <Dialog 
         open={isConfluenceDialogOpen} 
         onClose={() => !isGeneratingTable && setIsConfluenceDialogOpen(false)}
+        disableEnforceFocus
+        disableAutoFocus
       >
         <DialogTitle>Generate Confluence Table</DialogTitle>
         <DialogContent>
@@ -203,8 +251,8 @@ export const PBRQueue: React.FC = () => {
           </Button>
           <Button 
             onClick={handleGenerateTable} 
-            variant="contained"
             disabled={!confluencePageUrl || isGeneratingTable}
+            variant="contained"
           >
             {isGeneratingTable ? 'Generating...' : 'Generate'}
           </Button>

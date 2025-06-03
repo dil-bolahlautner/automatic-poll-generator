@@ -117,16 +117,24 @@ export class ConfluenceService {
             <th>Ticket to Fix</th><th>Task type</th><th>Description / Information</th><th>Depending on</th><th>Target version</th><th>Reporter</th>
           </tr>
           ${tickets.map(ticket => {
-            const blockingIssues = (ticket.linkedIssues || [])
-              .filter(link => link.type.toLowerCase().includes('is blocked by') && link.direction === 'inward')
-              .map(link => link.key);
+            const blockingIssues = ticket.blockingIssues || [];
+            const blockingIssueLinks = blockingIssues.map(issue => 
+              `<a href="${confluenceConfig.jiraBrowseUrl}${E(issue.key)}">${E(issue.key)}</a>`
+            ).join(', ');
+
+            const targetVersion = ticket.fixVersions?.[0]?.name || '';
+            const formattedVersion = targetVersion.startsWith('QST 4.') ? '4.0' :
+                                   targetVersion.startsWith('QST 3.') ? '3.x' :
+                                   targetVersion;
+            const isGreen = formattedVersion === '4.0';
+
             return `
               <tr>
                 <td><a href="${confluenceConfig.jiraBrowseUrl}${E(ticket.key)}">${E(ticket.key)}</a></td>
                 <td>${E(ticket.type)}</td>
                 <td>${E(ticket.summary)}</td>
-                <td>${blockingIssues.length > 0 ? blockingIssues.map(key => `<a href="${confluenceConfig.jiraBrowseUrl}${E(key)}">${E(key)}</a>`).join(', ') : ''}</td>
-                <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">${E(ticket.fixVersions[0]?.name)?.startsWith('QST 4.') ? 'Green' : 'Blue'}</ac:parameter><ac:parameter ac:name="title">${E(ticket.fixVersions[0]?.name) || ''}</ac:parameter></ac:structured-macro></td>
+                <td>${blockingIssueLinks}</td>
+                <td><ac:structured-macro ac:name="status" ac:schema-version="1"><ac:parameter ac:name="colour">${isGreen ? 'Green' : 'Blue'}</ac:parameter><ac:parameter ac:name="title">${E(formattedVersion)}</ac:parameter></ac:structured-macro></td>
                 <td>${E(ticket.reporter) || ''}</td>
               </tr>
             `;

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { JiraTicket } from './jiraService'; // Ensure this JiraTicket matches the one used in RetroPresentation
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 // Interfaces for Retro Demo Page generation payload
 export interface RetroEpicWithTickets {
@@ -42,27 +42,31 @@ export interface ConfluenceTableRow {
 
 export const confluenceService = {
   async generateTable(pageUrl: string, tickets: JiraTicket[]): Promise<void> {
-    const tableRows: ConfluenceTableRow[] = tickets.map(ticket => {
-      // Calculate task type based on labels
-      const taskType = ticket.labels.some(label => 
+    console.log('Generating Confluence table with tickets:', tickets.map(t => ({
+      key: t.key,
+      blockingIssues: t.blockingIssues,
+      linkedIssues: t.linkedIssues
+    })));
+
+    const tableRows = tickets.map(ticket => {
+      // Calculate task type based on labels, with null check
+      const taskType = (ticket.labels || []).some(label => 
         label.toLowerCase().includes('backend')
       ) ? 'BACKEND' : 
-        ticket.labels.some(label => 
+        (ticket.labels || []).some(label => 
           label.toLowerCase().includes('frontend')
         ) ? 'FRONTEND' : '';
 
-      // Get blocking issues
-      const blockingIssues = ticket.linkedIssues
-        .filter(link => {
-          const isBlocking = link.type.toLowerCase().includes('blocks') && 
-                           link.direction === 'inward';
-          return isBlocking;
-        })
-        .map(link => link.key);
+      // Get blocking issues, with null check
+      const blockingIssues = (ticket.blockingIssues || [])
+        .map(issue => issue.key);
 
-      // Get target version and determine if it should be green
-      const targetVersion = ticket.fixVersions[0]?.name || '';
-      const isGreen = targetVersion.startsWith('4');
+      // Get target version and determine if it should be green, with null check
+      const targetVersion = ticket.fixVersions?.[0]?.name || '';
+      const formattedVersion = targetVersion.startsWith('QST 4.') ? '4.0' :
+                              targetVersion.startsWith('QST 3.') ? '3.x' :
+                              targetVersion;
+      const isGreen = formattedVersion === '4.0';
 
       return {
         ticketToRefine: `${ticket.key}: ${ticket.summary}`,
@@ -70,18 +74,19 @@ export const confluenceService = {
         description: ticket.summary,
         reporter: ticket.reporter,
         dependingOn: blockingIssues,
-        linkedIssues: ticket.linkedIssues,
+        linkedIssues: ticket.linkedIssues || [],
         targetVersion: {
-          value: targetVersion,
+          value: formattedVersion,
           isGreen
         }
       };
     });
 
-    await axios.post(`${API_BASE_URL}/confluence/table`, {
+    const response = await axios.post(`${API_BASE_URL}/api/confluence/table`, {
       pageUrl,
       tableRows
     });
+    return response.data;
   },
 
   async generateRetroDemoPage(
@@ -91,7 +96,7 @@ export const confluenceService = {
   ): Promise<RetroDemoPageResponse> {
     try {
       console.log('Frontend: Sending request to generate retro demo page:', { pageUrl, topicsData, sprintName });
-      const response = await axios.post<RetroDemoPageResponse>(`${API_BASE_URL}/confluence/generate-retro-page`, {
+      const response = await axios.post<RetroDemoPageResponse>(`${API_BASE_URL}/api/confluence/generate-retro-page`, {
         pageUrl,
         topicsData,
         sprintName

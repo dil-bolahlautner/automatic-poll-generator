@@ -336,6 +336,23 @@ class WebSocketService {
     console.log('Broadcasting server.pbrQueue.updated to all clients.');
     this.io.emit('server.pbrQueue.updated', queue);
   }
+
+  public handleAddTicketsToGlobalQueue(socket: Socket, tickets: JiraTicket[]): void {
+    try {
+      console.log('[WebSocketService] Adding tickets to global PBR queue:', tickets);
+      this.pokerService.addTicketsToGlobalPbrQueue(tickets)
+        .then(updatedQueue => {
+          console.log('[WebSocketService] Queue updated successfully:', updatedQueue);
+        })
+        .catch(error => {
+          console.error('[WebSocketService] Error adding tickets to queue:', error);
+          socket.emit('error', { message: 'Failed to add tickets to queue' });
+        });
+    } catch (error) {
+      console.error('[WebSocketService] Error in handleAddTicketsToGlobalQueue:', error);
+      socket.emit('error', { message: 'Failed to add tickets to queue' });
+    }
+  }
 }
 
 // This service needs to be instantiated with the HttpServer and PlanningPokerService instance.

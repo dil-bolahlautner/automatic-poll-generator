@@ -1,10 +1,22 @@
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import {
   PlanningPokerSession,
   PlanningPokerUser,
   JiraTicket,
 } from '../types/planningPoker';
 import WebSocketService from './websocketService';
+import { jiraConfig } from '../config/jira';
+
+// JIRA API configuration
+const jiraHost = process.env.JIRA_HOST || 'https://diligentbrands.atlassian.net';
+const jiraBaseUrl = `${jiraHost}/rest/api/2`;
+
+// Authentication configuration for JIRA API
+const jiraAuth = {
+  username: process.env.JIRA_USERNAME || '',
+  password: process.env.JIRA_API_TOKEN || ''
+};
 
 export class PlanningPokerService {
   private sessions: Map<string, PlanningPokerSession> = new Map();
@@ -44,8 +56,68 @@ export class PlanningPokerService {
     return [...this.globalPbrQueue];
   }
 
-  public addTicketsToGlobalPbrQueue(ticketsToAdd: JiraTicket[]): JiraTicket[] {
-    const newTickets = ticketsToAdd.filter(
+  public async addTicketsToGlobalPbrQueue(ticketsToAdd: JiraTicket[]): Promise<JiraTicket[]> {
+    // Get full ticket details from Jira for each ticket
+    const ticketsWithDetails = await Promise.all(
+      ticketsToAdd.map(async (ticket) => {
+        try {
+          const response = await axios.get(`${jiraBaseUrl}/issue/${ticket.key}`, {
+            auth: jiraAuth,
+            params: {
+              fields: jiraConfig.fields.join(',')
+            }
+          });
+
+          const issue = response.data;
+          
+          // Extract blocking issues (issues that block this ticket)
+          const blockingIssues = (issue.fields.issuelinks || [])
+            .filter((link: any) => {
+              return link.type.name === 'Blocks' && link.outwardIssue;
+            })
+            .map((link: any) => ({
+              key: link.outwardIssue.key,
+              summary: link.outwardIssue.fields.summary,
+              status: link.outwardIssue.fields.status.name,
+              type: link.outwardIssue.fields.issuetype.name
+            }));
+
+          // Transform issue into our ticket format
+          return {
+            key: issue.key,
+            summary: issue.fields.summary,
+            type: issue.fields.issuetype.name,
+            status: issue.fields.status.name,
+            labels: issue.fields.labels || [],
+            reporter: issue.fields.reporter?.displayName,
+            url: `${jiraHost}/browse/${issue.key}`,
+            fixVersions: (issue.fields.fixVersions || []).map((version: any) => ({
+              id: version.id,
+              name: version.name,
+              released: version.released
+            })),
+            linkedIssues: (issue.fields.issuelinks || []).map((link: any) => {
+              const isInward = !!link.inwardIssue;
+              return {
+                type: isInward ? link.type.inward : link.type.outward,
+                key: isInward ? link.inwardIssue.key : link.outwardIssue.key,
+                direction: isInward ? 'inward' : 'outward'
+              };
+            }),
+            blockingIssues: blockingIssues,
+            parent: issue.fields.parent ? {
+              key: issue.fields.parent.key,
+              summary: issue.fields.parent.fields.summary
+            } : undefined
+          };
+        } catch (error) {
+          console.error(`Error fetching details for ticket ${ticket.key}:`, error);
+          return ticket; // Return original ticket if fetch fails
+        }
+      })
+    );
+
+    const newTickets = ticketsWithDetails.filter(
       newTicket => !this.globalPbrQueue.some(existingTicket => existingTicket.key === newTicket.key)
     );
     this.globalPbrQueue.push(...newTickets);
