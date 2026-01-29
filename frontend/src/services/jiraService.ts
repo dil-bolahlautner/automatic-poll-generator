@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { getAuthHeaders } from '../utils/authUtils';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface JiraTicket {
   key: string;
@@ -60,7 +61,9 @@ export const jiraService = {
   async getTickets(): Promise<JiraResponse> {
     console.log('Frontend: Making JIRA tickets request to:', `${API_BASE_URL}/api/jira/tickets`);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/jira/tickets`);
+      const response = await axios.get(`${API_BASE_URL}/api/jira/tickets`, {
+        headers: getAuthHeaders()
+      });
       console.log('Frontend: Raw JIRA response:', response.data);
       
       // Validate response structure
@@ -102,7 +105,9 @@ export const jiraService = {
   async getFixVersions(): Promise<FixVersion[]> {
     console.log('Frontend: Making fix versions request to:', `${API_BASE_URL}/api/jira/fix-versions`);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/jira/fix-versions`);
+      const response = await axios.get(`${API_BASE_URL}/api/jira/fix-versions`, {
+        headers: getAuthHeaders()
+      });
       console.log('Frontend: Received fix versions response:', {
         versionsCount: response.data.length
       });
@@ -118,9 +123,9 @@ export const jiraService = {
   },
 
   getTicketUrl(ticketKey: string): string {
-    const host = process.env.REACT_APP_JIRA_HOST;
+    const host = import.meta.env.VITE_JIRA_HOST;
     if (!host) {
-      console.error('REACT_APP_JIRA_HOST environment variable is not set');
+      console.error('VITE_JIRA_HOST environment variable is not set');
       return `#${ticketKey}`;
     }
     return `https://${host}/browse/${ticketKey}`;
@@ -134,7 +139,9 @@ export const jiraService = {
     const url = `${API_BASE_URL}/api/jira/sprints/search?${params.toString()}`;
     console.log('Frontend: Making JIRA sprints search request to:', url);
     try {
-      const response = await axios.get<Sprint[]>(url);
+      const response = await axios.get<Sprint[]>(url, {
+        headers: getAuthHeaders()
+      });
       console.log('Frontend: Received JIRA sprints response:', {
         sprintsCount: response.data.length,
         firstSprint: response.data[0]
@@ -160,7 +167,9 @@ export const jiraService = {
     const url = `${API_BASE_URL}/api/jira/sprints/${sprintId}/tickets`;
     console.log('Frontend: Making JIRA sprint tickets request to:', url);
     try {
-      const response = await axios.get<JiraResponse>(url);
+      const response = await axios.get<JiraResponse>(url, {
+        headers: getAuthHeaders()
+      });
       console.log('Frontend: Raw JIRA sprint tickets response:', response.data);
 
       if (!response.data || !Array.isArray(response.data.tickets) || typeof response.data.total !== 'number') {

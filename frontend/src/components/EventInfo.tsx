@@ -10,10 +10,11 @@
  * and helps users identify their role in the session.
  */
 
-import React from 'react';
-import { Box, Typography, Chip } from '@mui/material';
+import { Box, Paper, Typography, Chip, Stack } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import GroupIcon from '@mui/icons-material/Group';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import { EstimationEvent, User } from '../types/estimation';
 
 /**

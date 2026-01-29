@@ -49,6 +49,9 @@ export interface PlanningPokerSession {
   currentTicketKey: string | null; // Key of the ticket currently being estimated
   votingOpen: boolean; // Is voting currently allowed for the current ticket
   votesRevealed: boolean; // Have votes for the current ticket been revealed
+  discussionPhase: boolean; // Are we in discussion phase after no consensus
+  autoRevealEnabled: boolean; // Should votes be revealed automatically when all vote
+  finalEstimations: Record<string, string>; // Maps ticket key to final agreed estimation value
   // Frontend might derive additional state, e.g., average vote, from this
 }
 

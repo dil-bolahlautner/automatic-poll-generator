@@ -1,0 +1,38 @@
+INFO:     Will watch for changes in these directories: ['/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend']
+INFO:     Uvicorn running on http://0.0.0.0:3002 (Press CTRL+C to quit)
+INFO:     Started reloader process [74605] using StatReload
+INFO:     Started server process [74609]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:53503 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53518 - "OPTIONS /keep-alive HTTP/1.1" 200 OK
+INFO:app.main:get_current_user called with token: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik...
+WARNING:app.main:JWTError: Signature has expired.
+INFO:     127.0.0.1:53518 - "POST /keep-alive HTTP/1.1" 401 Unauthorized
+INFO:app.main:Login attempt for user: bolahlautner@diligent.com
+INFO:app.main:Successful login for user: bolahlautner@diligent.com
+INFO:     127.0.0.1:53523 - "POST /login HTTP/1.1" 200 OK
+INFO:app.main:get_current_user called with token: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik...
+INFO:app.main:JWT payload: {'sub': '1', 'email': 'bolahlautner@diligent.com', 'is_admin': False, 'exp': 1769517042}
+INFO:app.main:User bolahlautner@diligent.com last_active: 2026-01-27 11:30:42.229890, now: 2026-01-27 11:30:42.348173
+INFO:app.main:User bolahlautner@diligent.com last_active updated to: 2026-01-27 11:30:42.348173
+=== KEEP ALIVE ENDPOINT HIT ===
+INFO:     127.0.0.1:53520 - "POST /keep-alive HTTP/1.1" 200 OK
+INFO:app.main:get_current_user called with token: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik...
+INFO:app.main:JWT payload: {'sub': '1', 'email': 'bolahlautner@diligent.com', 'is_admin': False, 'exp': 1769517042}
+INFO:app.main:User bolahlautner@diligent.com last_active: 2026-01-27 11:30:42.348173, now: 2026-01-27 11:35:42.341937
+INFO:app.main:User bolahlautner@diligent.com last_active updated to: 2026-01-27 11:35:42.341937
+=== KEEP ALIVE ENDPOINT HIT ===
+INFO:     127.0.0.1:53890 - "POST /keep-alive HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54487 - "OPTIONS /keep-alive HTTP/1.1" 200 OK
+INFO:app.main:get_current_user called with token: eyJhbGciOiJIUzI1NiIsInR5cCI6Ik...
+INFO:app.main:JWT payload: {'sub': '1', 'email': 'bolahlautner@diligent.com', 'is_admin': False, 'exp': 1769517042}
+INFO:app.main:User bolahlautner@diligent.com last_active: 2026-01-27 11:35:42.341937, now: 2026-01-27 11:40:42.531398
+INFO:app.main:User bolahlautner@diligent.com last_active updated to: 2026-01-27 11:40:42.531398
+=== KEEP ALIVE ENDPOINT HIT ===
+INFO:     127.0.0.1:54487 - "POST /keep-alive HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [74609]
+INFO:     Stopping reloader process [74605]

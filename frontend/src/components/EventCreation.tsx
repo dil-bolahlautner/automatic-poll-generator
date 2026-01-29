@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * EventCreation Component
+ * 
+ * Allows users to create new estimation events or join existing ones.
+ * Provides a tabbed interface for event creation and joining functionality.
+ */
+
+import { useState } from 'react';
 import { useEstimation } from '../contexts/EstimationContext';
-import { websocketService } from '../services/websocketService';
-import { Box, Paper, Typography, TextField, Button, Alert, Fade, Tab, Tabs } from '@mui/material';
+import { Box, Paper, Typography, TextField, Button, Alert, Tab, Tabs } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import LoginIcon from '@mui/icons-material/Login';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import GroupIcon from '@mui/icons-material/Group';
 
+// Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
   borderRadius: theme.spacing(2),
@@ -41,12 +48,16 @@ const ActionButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+// Types
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
 }
 
+/**
+ * TabPanel component for tabbed interface
+ */
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
@@ -63,205 +74,234 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+/**
+ * Main EventCreation component
+ */
 export function EventCreation() {
-  const { state, dispatch } = useEstimation();
+  const { dispatch } = useEstimation();
   const [eventName, setEventName] = useState('');
   const [userName, setUserName] = useState('');
   const [eventId, setEventId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
 
-  useEffect(() => {
-    const handleEventCreated = (message: any) => {
-      if (message.type === 'EVENT_CREATED') {
-        dispatch({
-          type: 'SET_CURRENT_EVENT',
-          payload: message.payload.event
-        });
-      }
-    };
-
-    const handleError = (message: any) => {
-      if (message.type === 'ERROR' || message.type === 'REGISTRATION_ERROR') {
-        setError(message.payload.message || message.payload.error);
-      }
-    };
-
-    // const unsubscribe = websocketService.subscribe((message) => {
-    //   handleEventCreated(message);
-    //   handleError(message);
-    // });
-    // return () => unsubscribe();
-    console.warn("EventCreation: Old websocketService.subscribe() call commented out.");
-    return () => {}; // Return an empty function for cleanup
-  }, [dispatch]);
-
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  /**
+   * Handles tab change in the interface
+   */
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-    setError(null);
+    setError(null); // Clear errors when switching tabs
   };
 
+  /**
+   * Handles event creation form submission
+   */
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!eventName.trim() || !userName.trim()) {
-      setError('Please enter both event name and your name');
+      setError('Please fill in all fields');
       return;
     }
 
     try {
-      const userId = crypto.randomUUID();
-      // await websocketService.connect(userId, true);
-      // await websocketService.registerUser(userId, userName);
-      // await websocketService.createEvent(eventName);
-      console.warn("EventCreation: Old websocketService calls in handleCreateEvent commented out.");
-      setError('Event creation is temporarily disabled.'); // Inform user
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create event');
+      // Generate a unique event ID
+      const newEventId = crypto.randomUUID();
+      
+      // Create the event
+      const event = {
+        id: newEventId,
+        name: eventName.trim(),
+        hostId: newEventId,
+        status: 'active' as const,
+        createdAt: new Date().toISOString(),
+        currentTicketIndex: 0,
+        tickets: [],
+        participants: [{
+          id: newEventId,
+          name: userName.trim(),
+          isHost: true
+        }]
+      };
+
+      // Update the estimation context
+      dispatch({
+        type: 'SET_CURRENT_EVENT',
+        payload: event
+      });
+
+      // Clear form
+      setEventName('');
+      setUserName('');
+      setError(null);
+    } catch (error) {
+      setError('Failed to create event. Please try again.');
+      console.error('Create event error:', error);
     }
   };
 
+  /**
+   * Handles event joining form submission
+   */
   const handleJoinEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!eventId.trim() || !userName.trim()) {
-      setError('Please enter both event ID and your name');
+      setError('Please fill in all fields');
       return;
     }
 
     try {
-      const userId = crypto.randomUUID();
-      // await websocketService.connect(userId, false);
-      // await websocketService.registerUser(userId, userName);
-      // await websocketService.joinEvent(eventId);
-      console.warn("EventCreation: Old websocketService calls in handleJoinEvent commented out.");
-      setError('Joining events is temporarily disabled.'); // Inform user
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to join event');
+      // For now, we'll create a mock event since the old WebSocket service is not available
+      const event = {
+        id: eventId.trim(),
+        name: `Event ${eventId.trim()}`,
+        hostId: 'mock-host-id',
+        status: 'active' as const,
+        createdAt: new Date().toISOString(),
+        currentTicketIndex: 0,
+        tickets: [],
+        participants: [{
+          id: crypto.randomUUID(),
+          name: userName.trim(),
+          isHost: false
+        }]
+      };
+
+      // Update the estimation context
+      dispatch({
+        type: 'SET_CURRENT_EVENT',
+        payload: event
+      });
+
+      // Clear form
+      setEventId('');
+      setUserName('');
+      setError(null);
+    } catch (error) {
+      setError('Failed to join event. Please try again.');
+      console.error('Join event error:', error);
     }
   };
 
-  if (state.currentEvent) {
-    return null;
-  }
-
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
-      <StyledPaper elevation={3}>
+    <Box sx={{ maxWidth: 800, mx: 'auto', mt: 4, px: 2 }}>
+      <StyledPaper>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <EmojiEventsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-          <Typography variant="h4" component="h2" gutterBottom sx={{ fontWeight: 600 }}>
-            Planning Poker
+          <Typography variant="h4" gutterBottom>
+            Estimation Event
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Create a new estimation event or join an existing one
           </Typography>
         </Box>
 
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          variant="fullWidth"
-          sx={{
-            mb: 3,
-            '& .MuiTabs-indicator': {
-              height: 3,
-              borderRadius: '3px 3px 0 0',
-            },
-          }}
-        >
-          <Tab
-            icon={<AddIcon />}
-            label="Create Event"
-            iconPosition="start"
-            sx={{ textTransform: 'none' }}
-          />
-          <Tab
-            icon={<LoginIcon />}
-            label="Join Event"
-            iconPosition="start"
-            sx={{ textTransform: 'none' }}
-          />
-        </Tabs>
-
-        <Fade in={!!error}>
+        {error && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {error}
           </Alert>
-        </Fade>
+        )}
 
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} centered>
+            <Tab 
+              icon={<AddIcon />} 
+              label="Create Event" 
+              iconPosition="start"
+            />
+            <Tab 
+              icon={<LoginIcon />} 
+              label="Join Event" 
+              iconPosition="start"
+            />
+          </Tabs>
+        </Box>
+
+        {/* Create Event Tab */}
         <TabPanel value={tabValue} index={0}>
-          <form onSubmit={handleCreateEvent}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <StyledTextField
-                label="Your Name"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter your name"
-                fullWidth
-                required
-                InputProps={{
-                  startAdornment: <GroupIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
-              />
-              <StyledTextField
-                label="Event Name"
-                value={eventName}
-                onChange={(e) => setEventName(e.target.value)}
-                placeholder="Enter event name"
-                fullWidth
-                required
-                InputProps={{
-                  startAdornment: <EmojiEventsIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
-              />
-              <ActionButton
-                type="submit"
-                variant="contained"
-                color="primary"
-                size="large"
-                startIcon={<AddIcon />}
-              >
-                Create Event
-              </ActionButton>
-            </Box>
-          </form>
+          <Box component="form" onSubmit={handleCreateEvent}>
+            <Typography variant="h6" gutterBottom>
+              <GroupIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+              Create New Event
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Create a new estimation event and invite your team to join
+            </Typography>
+            
+            <StyledTextField
+              fullWidth
+              label="Your Name"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Enter your name"
+              sx={{ mb: 3 }}
+              required
+            />
+            
+            <StyledTextField
+              fullWidth
+              label="Event Name"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              placeholder="Enter event name"
+              sx={{ mb: 3 }}
+              required
+            />
+            
+            <ActionButton
+              type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
+              startIcon={<AddIcon />}
+            >
+              Create Event
+            </ActionButton>
+          </Box>
         </TabPanel>
 
+        {/* Join Event Tab */}
         <TabPanel value={tabValue} index={1}>
-          <form onSubmit={handleJoinEvent}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <StyledTextField
-                label="Your Name"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter your name"
-                fullWidth
-                required
-                InputProps={{
-                  startAdornment: <GroupIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
-              />
-              <StyledTextField
-                label="Event ID"
-                value={eventId}
-                onChange={(e) => setEventId(e.target.value)}
-                placeholder="Enter event ID"
-                fullWidth
-                required
-                InputProps={{
-                  startAdornment: <LoginIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                }}
-              />
-              <ActionButton
-                type="submit"
-                variant="contained"
-                color="secondary"
-                size="large"
-                startIcon={<LoginIcon />}
-              >
-                Join Event
-              </ActionButton>
-            </Box>
-          </form>
+          <Box component="form" onSubmit={handleJoinEvent}>
+            <Typography variant="h6" gutterBottom>
+              <LoginIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+              Join Existing Event
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Join an existing estimation event using the event ID
+            </Typography>
+            
+            <StyledTextField
+              fullWidth
+              label="Your Name"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="Enter your name"
+              sx={{ mb: 3 }}
+              required
+            />
+            
+            <StyledTextField
+              fullWidth
+              label="Event ID"
+              value={eventId}
+              onChange={(e) => setEventId(e.target.value)}
+              placeholder="Enter event ID"
+              sx={{ mb: 3 }}
+              required
+            />
+            
+            <ActionButton
+              type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
+              startIcon={<LoginIcon />}
+            >
+              Join Event
+            </ActionButton>
+          </Box>
         </TabPanel>
       </StyledPaper>
     </Box>

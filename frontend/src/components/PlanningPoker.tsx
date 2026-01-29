@@ -6,6 +6,8 @@
  * - Vote on story points using Fibonacci sequence
  * - View real-time voting results and statistics
  * - Manage session flow (start voting, reveal votes, next ticket)
+ * 
+ * This component has been refactored for better maintainability and readability.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -17,39 +19,31 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
-  IconButton,
   Button,
   Stack,
-  TextField,
   CircularProgress,
   Alert,
   Grid,
-  Card,
-  CardContent,
-  CardActions,
   Chip,
-  useTheme,
-  useMediaQuery,
-  Fade,
-  Divider,
   Avatar,
+  TextField,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
 import CasinoIcon from '@mui/icons-material/Casino';
 import GroupIcon from '@mui/icons-material/Group';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import { useQueue } from '../contexts/QueueContext';
-import { planningPokerWsService } from '../services/planningPokerWebsocketService';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import planningPokerWsService from '../services/planningPokerWebsocketService';
 import { PlanningPokerSession, JiraTicket as FrontendJiraTicket, ErrorPayload, PlanningPokerUser, SessionTerminatedPayload } from '../types/planningPoker';
-import { jiraService } from '../services/jiraService';
-import styled from '@emotion/styled';
 import { Theme } from '@mui/material/styles';
 import { styled as muiStyled } from '@mui/material/styles';
+import { toast } from 'react-hot-toast';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
-// Fibonacci sequence cards for story point estimation
-const FIBONACCI_CARDS = ['0', '1/2', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
+// Constants
+const BASE_FIBONACCI_CARDS = ['0', '1/2', '1', '2', '3', '5', '8', '13', '20', '40', '100', '?', '☕'];
 
 // Styled components for consistent look
 const StyledPaper = muiStyled(Paper)<{ theme?: Theme }>(({ theme }) => ({
@@ -86,795 +80,1272 @@ const ActionButton = muiStyled(Button)<{ theme?: Theme }>(({ theme }) => ({
   },
 }));
 
-// Add these styled components after the existing styled components
-const ParticipantsCard = muiStyled(StyledPaper)<{ 
-  theme?: Theme;
-  votingStatus: 'waiting' | 'voting' | 'complete';
-}>(({ theme, votingStatus }) => ({
-  position: 'relative',
-  transition: 'all 0.3s ease',
-  ...(votingStatus === 'complete' && {
-    background: 'linear-gradient(145deg, #e8f5e9 0%, #f1f8e9 100%)',
-  }),
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: theme?.spacing(2),
-    border: '2px solid transparent',
-    transition: 'border-color 0.3s ease',
-    ...(votingStatus === 'voting' && {
-      borderColor: theme?.palette.error.main,
-      animation: 'pulse 2s infinite',
-    }),
-    ...(votingStatus === 'complete' && {
-      borderColor: theme?.palette.success.main,
-    }),
-  },
-  '@keyframes pulse': {
-    '0%': {
-      boxShadow: '0 0 0 0 rgba(211, 47, 47, 0.4)',
-    },
-    '70%': {
-      boxShadow: '0 0 0 10px rgba(211, 47, 47, 0)',
-    },
-    '100%': {
-      boxShadow: '0 0 0 0 rgba(211, 47, 47, 0)',
-    },
-  },
+const ParticipantsCard = muiStyled(StyledPaper, {
+  shouldForwardProp: (prop) => prop !== '$votingStatus',
+})<{ $votingStatus?: boolean; theme?: Theme }>(({ $votingStatus, theme }) => ({
+  border: $votingStatus ? `2px solid ${theme?.palette.primary.main}` : 'none',
+  backgroundColor: $votingStatus ? theme?.palette.primary.light + '10' : 'inherit',
 }));
 
-// Add this function before the PlanningPoker component
+// Utility functions
 const getInitials = (name: string): string => {
   return name
     .split(' ')
-    .map(part => part[0])
+    .map(word => word.charAt(0))
     .join('')
     .toUpperCase()
     .slice(0, 2);
 };
 
-// Add this function to generate pastel colors based on user name
 const getPastelColor = (name: string): string => {
-  // Use the name to generate a consistent color for each user
-  const hash = name.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
-  const hue = hash % 360;
-  return `hsl(${hue}, 70%, 80%)`; // Pastel color with high lightness
+  const colors = [
+    '#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#FFB3F7',
+    '#B3FFB3', '#B3D9FF', '#FFE6B3', '#E6B3FF', '#B3FFF0'
+  ];
+  const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+  return colors[index];
 };
 
-/**
- * Main Planning Poker component
- * @returns {JSX.Element} The rendered component
- */
-export function PlanningPoker() {
-  // Context and state hooks
-  const { queue: globalPbrQueue, setLiveQueue, addTicketsToGlobalQueue, removeTicketFromGlobalQueue, clearGlobalQueue } = useQueue();
+// Custom hooks for better separation of concerns
+const usePlanningPokerSession = () => {
   const [session, setSession] = useState<PlanningPokerSession | null>(null);
-  const [userName, setUserName] = useState<string>(localStorage.getItem('planningPokerUserName') || '');
-  const [sessionIdToJoin, setSessionIdToJoin] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [wsError, setWsError] = useState<string | null>(null);
-  const [myUserId, setMyUserId] = useState<string | null>(null);
-  // const [currentView, setCurrentView] = useState<'initial' | 'lobby' | 'voting' | 'results'>('initial'); // Simplified for now
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Handles session updates from WebSocket
-   * @param updatedSession - The updated session data
-   */
   const handleSessionUpdate = useCallback((updatedSession: PlanningPokerSession) => {
-    console.log('Received session update:', updatedSession);
     setSession(updatedSession);
-    setWsError(null);
-    setIsLoading(false);
-    // The logic for setting myUserId is moved to the connect .then() block
-  }, [/* Removed myUserId, userName. Add back userName if it's used for other reasons here */]);
-
-  /**
-   * Handles WebSocket errors
-   * @param error - The error payload
-   */
-  const handleError = useCallback((error: any) => { // Changed type to any for more flexible checking
-    console.error('WebSocket Error:', error);
-    let errorMessage = 'An unknown WebSocket error occurred.';
-    if (typeof error === 'string') {
-      errorMessage = error;
-    } else if (error && typeof error.message === 'string') {
-      errorMessage = error.message;
-    } else if (error && typeof error.details === 'string') {
-      errorMessage = error.details;
-    } else if (error) {
-      try {
-        errorMessage = JSON.stringify(error);
-      } catch (e) {
-        // If stringify fails, keep the default message
-      }
-    }
-    setWsError(errorMessage);
-    setIsLoading(false);
+    setError(null);
   }, []);
 
-  const handleSessionTerminated = useCallback((payload: SessionTerminatedPayload) => {
-    console.log('[PlanningPoker.tsx] Session terminated:', payload);
+  const handleSessionTerminated = useCallback((terminatedPayload: SessionTerminatedPayload) => {
     setSession(null);
-    setWsError(`Session ended: ${payload.reason}`);
-    setIsLoading(false);
-    // Clear any local state that might be related to the session
-    setMyUserId(null);
+    toast.error(`Session terminated: ${terminatedPayload.reason}`);
   }, []);
 
-  // Callback for WebSocket service to update the global PBR queue
-  const stableSetLiveQueue = useCallback((newQueue: FrontendJiraTicket[]) => {
-    setLiveQueue(newQueue);
-  }, [setLiveQueue]);
+  const handleError = useCallback((error: ErrorPayload) => {
+    setError(error.message);
+    toast.error(error.message);
+  }, []);
 
-  // Persist username in localStorage
-  useEffect(() => {
-    localStorage.setItem('planningPokerUserName', userName);
-  }, [userName]);
+  return {
+    session,
+    loading,
+    error,
+    setSession,
+    setLoading,
+    setError,
+    handleSessionUpdate,
+    handleSessionTerminated,
+    handleError
+  };
+};
 
-  // Initialize WebSocket connection and set up event handlers
-  useEffect(() => {
-    console.log('[PlanningPoker.tsx] Mounted. Setting up event handlers.');
-    
-    // Set up event handlers
-    const handleSessionUpdate = (updatedSession: PlanningPokerSession) => {
-      console.log('[PlanningPoker.tsx] Received session update:', updatedSession);
-      setSession(updatedSession);
-      setWsError(null);
-      setIsLoading(false);
+const useWebSocketConnection = () => {
+  const [isConnected, setIsConnected] = useState(false);
+
+  const handleConnect = useCallback(() => {
+    setIsConnected(true);
+    toast.success('Connected to planning poker session');
+  }, []);
+
+  const handleDisconnect = useCallback(() => {
+    setIsConnected(false);
+    toast.error('Disconnected from planning poker session');
+  }, []);
+
+  return {
+    isConnected,
+    handleConnect,
+    handleDisconnect
+  };
+};
+
+const useSessionActions = (session: PlanningPokerSession | null) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleCreateSession = useCallback(async () => {
+    if (!user?.email) {
+      toast.error('Please log in to create a session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.createSession(user.email);
+      toast.success('Session created successfully! Share the session ID with your team to invite them.');
+    } catch (error) {
+      toast.error('Failed to create session');
+      console.error('Create session error:', error);
+    }
+  }, [user?.email]);
+
+  const handleRemoveTicketFromQueue = useCallback((ticketKey: string) => {
+    try {
+      planningPokerWsService.removeTicketFromQueue(ticketKey);
+      toast.success('Ticket removed from queue');
+    } catch (error) {
+      toast.error('Failed to remove ticket from queue');
+      console.error('Remove ticket error:', error);
+    }
+  }, []);
+
+  const handleStartVoting = useCallback(async () => {
+    if (!session?.currentTicketKey || !session?.id) {
+      toast.error('No ticket selected for voting');
+      return;
+    }
+
+    try {
+      planningPokerWsService.startVoting(session.id, session.currentTicketKey);
+      toast.success('Voting started!');
+    } catch (error) {
+      toast.error('Failed to start voting');
+      console.error('Start voting error:', error);
+    }
+  }, [session?.currentTicketKey, session?.id]);
+
+  const handleVote = useCallback(async (voteValue: string) => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.submitVote(session.id, voteValue);
+      toast.success('Vote submitted!');
+    } catch (error) {
+      toast.error('Failed to submit vote');
+      console.error('Vote error:', error);
+    }
+  }, [session?.id]);
+
+  const handleRevealVotes = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.revealVotes(session.id);
+      toast.success('Votes revealed!');
+    } catch (error) {
+      toast.error('Failed to reveal votes');
+      console.error('Reveal votes error:', error);
+    }
+  }, [session?.id]);
+
+  const handleNextTicket = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.nextTicket(session.id);
+      toast.success('Moving to next ticket');
+    } catch (error) {
+      toast.error('Failed to move to next ticket');
+      console.error('Next ticket error:', error);
+    }
+  }, [session?.id]);
+
+  const handleClearSession = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.clearSession(session.id);
+      toast.success('Session cleared');
+    } catch (error) {
+      toast.error('Failed to clear session');
+      console.error('Clear session error:', error);
+    }
+  }, [session?.id]);
+
+  const handleCloseSession = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.closeSession(session.id);
+      toast.success('Session closed');
+      navigate('/');
+    } catch (error) {
+      toast.error('Failed to close session');
+      console.error('Close session error:', error);
+    }
+  }, [session?.id, navigate]);
+
+  const handleLeaveSession = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.leaveSession(session.id);
+      toast.success('Left session');
+      navigate('/');
+    } catch (error) {
+      toast.error('Failed to leave session');
+      console.error('Leave session error:', error);
+    }
+  }, [session?.id, navigate]);
+
+  const handleTransferHost = useCallback(async (newHostId: string) => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.transferHost(session.id, newHostId);
+      toast.success('Host transferred');
+    } catch (error) {
+      toast.error('Failed to transfer host');
+      console.error('Transfer host error:', error);
+    }
+  }, [session?.id]);
+
+  const handleRestartVoting = useCallback(async () => {
+    if (!session?.id) {
+      toast.error('No active session');
+      return;
+    }
+
+    try {
+      planningPokerWsService.restartVoting(session.id);
+      toast.success('Voting restarted');
+    } catch (error) {
+      toast.error('Failed to restart voting');
+      console.error('Restart voting error:', error);
+    }
+  }, [session?.id]);
+
+  const handleSetFinalEstimation = useCallback(async (estimationValue: string) => {
+    if (!session?.id || !session?.currentTicketKey) {
+      toast.error('No active session or ticket');
+      return;
+    }
+
+    try {
+      planningPokerWsService.setFinalEstimation(session.id, session.currentTicketKey, estimationValue);
+      toast.success(`Final estimation set: ${estimationValue} story points`);
+    } catch (error) {
+      toast.error('Failed to set final estimation');
+      console.error('Set final estimation error:', error);
+    }
+  }, [session?.id, session?.currentTicketKey]);
+
+  return {
+    handleCreateSession,
+    handleRemoveTicketFromQueue,
+    handleStartVoting,
+    handleVote,
+    handleRevealVotes,
+    handleNextTicket,
+    handleClearSession,
+    handleCloseSession,
+    handleLeaveSession,
+    handleTransferHost,
+    handleRestartVoting,
+    handleSetFinalEstimation
+  };
+};
+
+// Sub-components for better organization
+
+const CurrentTicketDisplay = ({ 
+  ticket, 
+  votingOpen, 
+  votesRevealed,
+  discussionPhase
+}: { 
+  ticket: FrontendJiraTicket; 
+  votingOpen: boolean; 
+  votesRevealed: boolean; 
+  discussionPhase: boolean;
+}) => (
+  <StyledPaper>
+    <Typography variant="h6" gutterBottom>
+      Current Ticket
+    </Typography>
+    <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+      <Typography variant="h5" gutterBottom>
+        <Button
+          variant="text"
+          href={ticket.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{ 
+            textTransform: 'none', 
+            p: 0, 
+            minWidth: 'auto',
+            color: 'inherit',
+            textDecoration: 'underline',
+            '&:hover': {
+              textDecoration: 'underline',
+              backgroundColor: 'transparent'
+            }
+          }}
+        >
+          {ticket.key}
+        </Button>
+      </Typography>
+      <Typography variant="body1" paragraph>
+        {ticket.summary}
+      </Typography>
       
-      // Update myUserId if we receive a session update
-      const socketId = planningPokerWsService.getSocketId();
-      if (socketId) {
-        setMyUserId(socketId);
-        console.log('[PlanningPoker.tsx] My User ID (Socket ID) set from session update:', socketId);
-      }
+      {/* Jira URL Link */}
+      <Box sx={{ mb: 2 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          href={ticket.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          startIcon={<OpenInNewIcon />}
+          sx={{ textTransform: 'none' }}
+        >
+          Open in Jira
+        </Button>
+      </Box>
+      
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Chip 
+          label={ticket.type} 
+          size="small" 
+          color="primary" 
+        />
+        <Chip 
+          label={ticket.status} 
+          size="small" 
+          color="secondary" 
+        />
+        {votingOpen && (
+          <Chip 
+            label="Voting in progress" 
+            size="small" 
+            color="success" 
+          />
+        )}
+        {votesRevealed && !discussionPhase && (
+          <Chip 
+            label="Votes revealed" 
+            size="small" 
+            color="warning" 
+          />
+        )}
+        {discussionPhase && (
+          <Chip 
+            label="Discussion phase" 
+            size="small" 
+            color="error" 
+          />
+        )}
+      </Stack>
+    </Box>
+  </StyledPaper>
+);
+
+const SessionHeader = ({ session, isConnected }: { session: PlanningPokerSession; isConnected: boolean }) => {
+  const handleCopySessionId = () => {
+    navigator.clipboard.writeText(session.id);
+    toast.success('Session ID copied to clipboard!');
+  };
+
+  const currentTicket = session.currentTicketKey 
+    ? session.tickets.find(ticket => ticket.key === session.currentTicketKey)
+    : null;
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Planning Poker Session
+      </Typography>
+      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+        <Chip
+          label={`Session ID: ${session.id}`}
+          color="primary"
+          variant="outlined"
+          onClick={handleCopySessionId}
+          sx={{ cursor: 'pointer' }}
+          title="Click to copy session ID"
+        />
+        <Chip
+          label={isConnected ? 'Connected' : 'Disconnected'}
+          color={isConnected ? 'success' : 'error'}
+          size="small"
+        />
+        <Typography variant="body2" color="text.secondary">
+          {session.users.length} participants
+        </Typography>
+        {currentTicket && (
+          <Chip
+            label={`Current: ${currentTicket.key}`}
+            color="secondary"
+            size="small"
+            title={currentTicket.summary}
+            onClick={() => window.open(currentTicket.url, '_blank', 'noopener,noreferrer')}
+            sx={{ cursor: 'pointer' }}
+          />
+        )}
+        {session.votingOpen && (
+          <Chip
+            label="Voting Open"
+            color="success"
+            size="small"
+          />
+        )}
+      </Stack>
+    </Box>
+  );
+};
+
+const ParticipantsList = ({ users }: { users: PlanningPokerUser[] }) => (
+  <ParticipantsCard $votingStatus={false}>
+    <Typography variant="h6" gutterBottom>
+      <GroupIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+      Participants
+    </Typography>
+    <List dense>
+      {users.map((user) => (
+        <ListItem key={user.id}>
+          <Avatar
+            sx={{
+              bgcolor: getPastelColor(user.name),
+              mr: 2,
+              width: 32,
+              height: 32,
+              fontSize: '0.8rem'
+            }}
+          >
+            {getInitials(user.name)}
+          </Avatar>
+          <ListItemText
+            primary={user.name}
+            secondary={
+              user.isHost ? 'Host' : 
+              user.hasVoted ? 'Voted' : 'Waiting to vote'
+            }
+          />
+          <ListItemSecondaryAction>
+            {user.isHost && <Chip label="Host" size="small" color="primary" />}
+            {user.hasVoted && !user.isHost && <Chip label="✓" size="small" color="success" />}
+          </ListItemSecondaryAction>
+        </ListItem>
+      ))}
+    </List>
+  </ParticipantsCard>
+);
+
+const VotingCards = ({ 
+  onVote, 
+  currentUser, 
+  votingOpen, 
+  votesRevealed,
+  discussionPhase
+}: { 
+  onVote: (vote: string) => void; 
+  currentUser: PlanningPokerUser; 
+  votingOpen: boolean; 
+  votesRevealed: boolean; 
+  discussionPhase: boolean;
+}) => (
+  <StyledPaper>
+    <Typography variant="h6" gutterBottom>
+      <CasinoIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+      Story Points
+    </Typography>
+    {discussionPhase && (
+      <Alert severity="warning" sx={{ mb: 2 }}>
+        <Typography variant="body2">
+          <strong>Discussion Phase:</strong> No consensus reached. You can change your vote or the host can set a final estimation.
+        </Typography>
+      </Alert>
+    )}
+    <Grid container spacing={1} justifyContent="center">
+      {BASE_FIBONACCI_CARDS.map((card) => (
+        <Grid item key={card}>
+          <VoteButton
+            variant={currentUser.vote === card ? 'contained' : 'outlined'}
+            color={currentUser.vote === card ? 'primary' : 'inherit'}
+            onClick={() => onVote(card)}
+            disabled={!votingOpen && !discussionPhase}
+            sx={{
+              minWidth: card === '?' || card === '☕' ? '80px' : '60px',
+              fontSize: card === '?' || card === '☕' ? '1rem' : '1.2rem'
+            }}
+          >
+            {card}
+          </VoteButton>
+        </Grid>
+      ))}
+    </Grid>
+  </StyledPaper>
+);
+
+const ActionButtons = ({ 
+  session, 
+  currentUser, 
+  onStartVoting, 
+  onRevealVotes, 
+  onNextTicket, 
+  onClearSession, 
+  onCloseSession, 
+  onLeaveSession,
+  onRestartVoting,
+  onSetFinalEstimation
+}: { 
+  session: PlanningPokerSession; 
+  currentUser: PlanningPokerUser; 
+  onStartVoting: () => void; 
+  onRevealVotes: () => void; 
+  onNextTicket: () => void; 
+  onClearSession: () => void; 
+  onCloseSession: () => void; 
+  onLeaveSession: () => void; 
+  onRestartVoting: () => void;
+  onSetFinalEstimation: (estimation: string) => void;
+}) => {
+  // Determine which buttons to show based on session state
+  const showStartVoting = currentUser.isHost && !session.votingOpen && !session.votesRevealed && session.currentTicketKey && session.tickets.length > 0;
+  const showRevealVotes = currentUser.isHost && session.votingOpen && !session.votesRevealed;
+  const showRestartVoting = currentUser.isHost && session.discussionPhase && !session.votingOpen;
+  const showNextTicket = currentUser.isHost && (session.votesRevealed || session.finalEstimations[session.currentTicketKey!]);
+  const showFinalEstimation = currentUser.isHost && session.discussionPhase && !session.votingOpen;
+
+  return (
+    <StyledPaper>
+      <Typography variant="h6" gutterBottom>
+        Session Actions
+      </Typography>
+      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+        {currentUser.isHost && (
+          <>
+            {showStartVoting && (
+              <ActionButton
+                variant="contained"
+                color="primary"
+                startIcon={<PlayArrowIcon />}
+                onClick={onStartVoting}
+              >
+                Start Voting
+              </ActionButton>
+            )}
+            {showRevealVotes && (
+              <ActionButton
+                variant="contained"
+                color="secondary"
+                startIcon={<VisibilityIcon />}
+                onClick={onRevealVotes}
+              >
+                Reveal Votes
+              </ActionButton>
+            )}
+            {showRestartVoting && (
+              <ActionButton
+                variant="contained"
+                color="warning"
+                startIcon={<PlayArrowIcon />}
+                onClick={onRestartVoting}
+              >
+                Restart Voting
+              </ActionButton>
+            )}
+            {showNextTicket && (
+              <ActionButton
+                variant="contained"
+                color="info"
+                startIcon={<NavigateNextIcon />}
+                onClick={onNextTicket}
+                disabled={session.tickets.length === 0}
+              >
+                Next Ticket
+              </ActionButton>
+            )}
+            {showFinalEstimation && (
+              <Stack direction="row" spacing={1}>
+                {BASE_FIBONACCI_CARDS.filter(card => card !== '?' && card !== '☕').map((estimation) => (
+                  <ActionButton
+                    key={estimation}
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    onClick={() => onSetFinalEstimation(estimation)}
+                  >
+                    {estimation}
+                  </ActionButton>
+                ))}
+              </Stack>
+            )}
+            <ActionButton
+              variant="outlined"
+              color="warning"
+              onClick={onClearSession}
+            >
+              Clear Session
+            </ActionButton>
+            <ActionButton
+              variant="outlined"
+              color="error"
+              onClick={onCloseSession}
+            >
+              Close Session
+            </ActionButton>
+          </>
+        )}
+        <ActionButton
+          variant="outlined"
+          color="inherit"
+          onClick={onLeaveSession}
+        >
+          Leave Session
+        </ActionButton>
+      </Stack>
+    </StyledPaper>
+  );
+};
+
+const VotingResults = ({ 
+  session
+}: { 
+  session: PlanningPokerSession; 
+  currentUser?: PlanningPokerUser; 
+}) => {
+  if (!session.votesRevealed && !session.discussionPhase) {
+    return null;
+  }
+
+  const votes = session.users
+    .filter(user => user.vote)
+    .map(user => ({ name: user.name, vote: user.vote! }));
+
+  // Filter out '?' and '☕' votes for result calculation
+  const validVotes = votes.filter(({ vote }) => vote !== '?' && vote !== '☕');
+  const invalidVotes = votes.filter(({ vote }) => vote === '?' || vote === '☕');
+
+  // Group valid votes by story point value
+  const votesByStoryPoint = validVotes.reduce((acc, { name, vote }) => {
+    if (!acc[vote]) {
+      acc[vote] = [];
+    }
+    acc[vote].push(name);
+    return acc;
+  }, {} as Record<string, string[]>);
+
+  // Group invalid votes separately
+  const invalidVotesByType = invalidVotes.reduce((acc, { name, vote }) => {
+    if (!acc[vote]) {
+      acc[vote] = [];
+    }
+    acc[vote].push(name);
+    return acc;
+  }, {} as Record<string, string[]>);
+
+  const hasConsensus = Object.keys(votesByStoryPoint).length === 1 && Object.keys(votesByStoryPoint).length > 0;
+  const finalEstimation = session.finalEstimations[session.currentTicketKey!];
+
+  return (
+    <StyledPaper>
+      <Typography variant="h6" gutterBottom>
+        Voting Results
+      </Typography>
+      <Box sx={{ mb: 2 }}>
+        {/* Valid Votes */}
+        {Object.keys(votesByStoryPoint).length > 0 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary', fontWeight: 600 }}>
+              Valid Votes
+            </Typography>
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              {Object.entries(votesByStoryPoint)
+                .sort(([a], [b]) => {
+                  // Sort story points in logical order (0, 1/2, 1, 2, 3, 5, 8, 13, 20, 40, 100)
+                  const order = ['0', '1/2', '1', '2', '3', '5', '8', '13', '20', '40', '100'];
+                  const aIndex = order.indexOf(a);
+                  const bIndex = order.indexOf(b);
+                  return aIndex - bIndex;
+                })
+                .map(([storyPoint, voters]) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={storyPoint}>
+                    <Box sx={{ 
+                      p: 2.5,
+                      borderRadius: 2,
+                      bgcolor: 'background.paper',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                        borderColor: 'primary.light'
+                      }
+                    }}>
+                      {/* Header */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        mb: 2,
+                        pb: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider'
+                      }}>
+                        <Typography 
+                          variant="h6" 
+                          sx={{ 
+                            fontWeight: 700,
+                            color: 'primary.main',
+                            fontSize: '1.25rem'
+                          }}
+                        >
+                          {storyPoint}SP
+                        </Typography>
+                        <Box sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          bgcolor: 'primary.main',
+                          color: 'white',
+                          fontSize: '0.875rem',
+                          fontWeight: 600
+                        }}>
+                          {voters.length}
+                        </Box>
+                      </Box>
+                      
+                      {/* Voters */}
+                      <Stack spacing={1}>
+                        {voters.map((voterName) => (
+                          <Box
+                            key={voterName}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              py: 0.5
+                            }}
+                          >
+                            <Box sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: 'primary.main',
+                              mr: 1.5,
+                              opacity: 0.7
+                            }} />
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontWeight: 500,
+                                color: 'text.secondary',
+                                fontSize: '0.875rem'
+                              }}
+                            >
+                              {voterName.split('@')[0]}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  </Grid>
+                ))}
+            </Grid>
+          </>
+        )}
+
+        {/* Invalid Votes (?, ☕) */}
+        {Object.keys(invalidVotesByType).length > 0 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mb: 2, color: 'text.secondary', fontWeight: 600 }}>
+              Abstentions
+            </Typography>
+            <Grid container spacing={3}>
+              {Object.entries(invalidVotesByType)
+                .sort(([a], [b]) => {
+                  const order = ['?', '☕'];
+                  const aIndex = order.indexOf(a);
+                  const bIndex = order.indexOf(b);
+                  return aIndex - bIndex;
+                })
+                .map(([voteType, voters]) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={voteType}>
+                    <Box sx={{ 
+                      p: 2.5,
+                      borderRadius: 2,
+                      bgcolor: 'background.paper',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      opacity: 0.7
+                    }}>
+                      {/* Header */}
+                      <Box sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between',
+                        mb: 2,
+                        pb: 1,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider'
+                      }}>
+                        <Typography 
+                          variant="h6" 
+                          sx={{ 
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            fontSize: '1.25rem'
+                          }}
+                        >
+                          {voteType === '?' ? 'Pass' : 'Break'}
+                        </Typography>
+                        <Box sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          bgcolor: 'text.secondary',
+                          color: 'white',
+                          fontSize: '0.875rem',
+                          fontWeight: 600
+                        }}>
+                          {voters.length}
+                        </Box>
+                      </Box>
+                      
+                      {/* Voters */}
+                      <Stack spacing={1}>
+                        {voters.map((voterName) => (
+                          <Box
+                            key={voterName}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              py: 0.5
+                            }}
+                          >
+                            <Box sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: 'text.secondary',
+                              mr: 1.5,
+                              opacity: 0.5
+                            }} />
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                fontWeight: 500,
+                                color: 'text.secondary',
+                                fontSize: '0.875rem'
+                              }}
+                            >
+                              {voterName.split('@')[0]}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  </Grid>
+                ))}
+            </Grid>
+          </>
+        )}
+      </Box>
+      <Stack direction="row" spacing={1} alignItems="center">
+        {hasConsensus && (
+          <Chip 
+            label="Consensus reached!" 
+            color="success" 
+            size="small" 
+          />
+        )}
+        {!hasConsensus && session.discussionPhase && (
+          <Chip 
+            label="No consensus - discuss and vote again" 
+            color="warning" 
+            size="small" 
+          />
+        )}
+        {finalEstimation && (
+          <Chip 
+            label={`Final: ${finalEstimation} story points`} 
+            color="primary" 
+            size="small" 
+          />
+        )}
+      </Stack>
+    </StyledPaper>
+  );
+};
+
+const EstimatedItemsList = ({ finalEstimations, tickets }: { finalEstimations: Record<string, string>; tickets: FrontendJiraTicket[] }) => {
+  if (Object.keys(finalEstimations).length === 0) {
+    return (
+      <StyledPaper>
+        <Typography variant="h6" gutterBottom>
+          Final Estimations
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          No estimations have been finalized yet.
+        </Typography>
+      </StyledPaper>
+    );
+  }
+
+  return (
+    <StyledPaper>
+      <Typography variant="h6" gutterBottom>
+        Final Estimations
+      </Typography>
+      <List>
+        {tickets.map((ticket) => {
+          const estimation = finalEstimations[ticket.key];
+          if (!estimation) return null;
+
+          return (
+            <ListItem key={ticket.key} divider>
+              <ListItemText
+                primary={ticket.key}
+                secondary={ticket.summary}
+              />
+              <ListItemSecondaryAction>
+                <Chip
+                  label={estimation}
+                  color="primary"
+                  variant="outlined"
+                />
+              </ListItemSecondaryAction>
+            </ListItem>
+          );
+        })}
+      </List>
+    </StyledPaper>
+  );
+};
+
+// Join Session Form Component
+const JoinSessionForm = () => {
+  const { user } = useAuth();
+  const [sessionId, setSessionId] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+
+  const handleJoinSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const trimmedSessionId = sessionId.trim();
+    
+    if (!trimmedSessionId) {
+      toast.error('Please enter a session ID');
+      return;
+    }
+
+    if (trimmedSessionId.length < 3) {
+      toast.error('Session ID must be at least 3 characters long');
+      return;
+    }
+
+    if (!user?.email) {
+      toast.error('Please log in to join a session');
+      return;
+    }
+
+    setIsJoining(true);
+    try {
+      planningPokerWsService.joinSession(trimmedSessionId, user.email);
+      toast.success('Joining session...');
+    } catch (error) {
+      toast.error('Failed to join session');
+      console.error('Join session error:', error);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  return (
+    <Box component="form" onSubmit={handleJoinSession}>
+      <Stack spacing={2}>
+        <Typography variant="body2" color="text.secondary">
+          Ask the session host for the session ID. You can find it displayed at the top of their planning poker screen.
+        </Typography>
+        <TextField
+          fullWidth
+          label="Session ID"
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
+          placeholder="e.g., abc123-def456"
+          disabled={isJoining}
+          required
+          helperText="Enter the session ID provided by the host"
+        />
+        <Button
+          type="submit"
+          variant="outlined"
+          size="large"
+          disabled={!user?.email || isJoining}
+          startIcon={<GroupIcon />}
+          fullWidth
+        >
+          {isJoining ? 'Joining...' : 'Join Session'}
+        </Button>
+      </Stack>
+    </Box>
+  );
+};
+
+// Main component
+export function PlanningPoker() {
+  const { user } = useAuth();
+  const { sessionId } = useParams();
+
+  // Custom hooks
+  const {
+    session,
+    loading,
+    error,
+    setSession
+  } = usePlanningPokerSession();
+
+  const {
+    isConnected,
+    handleConnect,
+    handleDisconnect
+  } = useWebSocketConnection();
+
+  const {
+    handleCreateSession,
+    handleStartVoting,
+    handleVote,
+    handleRevealVotes,
+    handleNextTicket,
+    handleClearSession,
+    handleCloseSession,
+    handleLeaveSession,
+    handleRestartVoting,
+    handleSetFinalEstimation
+  } = useSessionActions(session);
+
+  // WebSocket event handlers
+  useEffect(() => {
+    const handleSessionUpdate = (updatedSession: PlanningPokerSession) => {
+      setSession(updatedSession);
     };
 
-    const handleSessionTerminated = (payload: SessionTerminatedPayload) => {
-      console.log('[PlanningPoker.tsx] Session terminated:', payload);
+    const handleSessionTerminated = (terminatedPayload: SessionTerminatedPayload) => {
       setSession(null);
-      setWsError(`Session ended: ${payload.reason}`);
-      setIsLoading(false);
+      toast.error(`Session terminated: ${terminatedPayload.reason}`);
     };
 
-    const handleError = (error: any) => {
-      console.error('[PlanningPoker.tsx] WebSocket Error:', error);
-      let errorMessage = 'An unknown WebSocket error occurred.';
-      if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error && typeof error.message === 'string') {
-        errorMessage = error.message;
-      } else if (error && typeof error.details === 'string') {
-        errorMessage = error.details;
-      } else if (error) {
-        try {
-          errorMessage = JSON.stringify(error);
-        } catch (e) {
-          // If stringify fails, keep the default message
-        }
-      }
-      setWsError(errorMessage);
-      setIsLoading(false);
+    const handleError = (error: ErrorPayload) => {
+      toast.error(error.message);
     };
 
-    // Register event handlers with the WebSocket service
     planningPokerWsService.onSessionUpdate(handleSessionUpdate);
     planningPokerWsService.onSessionTerminated(handleSessionTerminated);
     planningPokerWsService.onError(handleError);
 
-    // Connect to WebSocket if not already connected
-    if (!planningPokerWsService.isConnected()) {
-      console.log('[PlanningPoker.tsx] Not connected, attempting to connect...');
-      setIsLoading(true);
-      planningPokerWsService.connect(
-        handleSessionUpdate,
-        handleSessionTerminated,
-        stableSetLiveQueue,
-        handleError
-      ).then(() => {
-        console.log('[PlanningPoker.tsx] Connection successful');
-        setIsLoading(false);
-      }).catch((error) => {
-        console.error('[PlanningPoker.tsx] Connection failed:', error);
-        setWsError('Failed to connect to session server: ' + (error.message || 'Unknown error'));
-        setIsLoading(false);
-      });
-    } else {
-      console.log('[PlanningPoker.tsx] Already connected');
-      setIsLoading(false);
-    }
-
     return () => {
-      console.log('[PlanningPoker.tsx] Unmounting. Cleaning up event handlers.');
-      // Unregister event handlers
       planningPokerWsService.offSessionUpdate(handleSessionUpdate);
       planningPokerWsService.offSessionTerminated(handleSessionTerminated);
       planningPokerWsService.offError(handleError);
-      setSession(null); // Clear local session state
     };
-  }, [stableSetLiveQueue]); // Only depend on stableSetLiveQueue
+  }, [setSession]);
 
-  /**
-   * Creates a new planning poker session
-   */
-  const handleCreateSession = () => {
-    if (!userName.trim()) {
-      setWsError('Please enter your name.');
-      return;
+  // Connection status
+  useEffect(() => {
+    planningPokerWsService.onConnected(handleConnect);
+    planningPokerWsService.onDisconnected(handleDisconnect);
+
+    return () => {
+      planningPokerWsService.offConnected(handleConnect);
+      planningPokerWsService.offDisconnected(handleDisconnect);
+    };
+  }, [handleConnect, handleDisconnect]);
+
+  // Join session if sessionId is provided
+  useEffect(() => {
+    if (sessionId && user?.email) {
+      planningPokerWsService.joinSession(sessionId, user.email);
     }
-    // globalPbrQueue is now managed by WebSocket and QueueContext
-    if (globalPbrQueue.length === 0) {
-      setWsError('The global PBR queue is empty. Add tickets before creating a session.');
-      return;
+  }, [sessionId, user?.email]);
+
+  // Show success message when session is first created
+  const [showSessionCreatedMessage, setShowSessionCreatedMessage] = useState(false);
+  
+  useEffect(() => {
+    if (session && !sessionId) {
+      // Session was created (not joined via URL)
+      setShowSessionCreatedMessage(true);
+      // Hide message after 10 seconds
+      const timer = setTimeout(() => setShowSessionCreatedMessage(false), 10000);
+      return () => clearTimeout(timer);
     }
-    setWsError(null);
-    setIsLoading(true);
-    // No need to pass tickets; backend uses its globalPbrQueue
-    planningPokerWsService.createSession(userName.trim());
-  };
+  }, [session, sessionId]);
 
-  // Note: The component responsible for adding tickets to the PBR queue (e.g., JiraTicketSelector)
-  // should now use `addTicketsToGlobalQueue` from `useQueue()`.
-  // That component will be responsible for ensuring the tickets it passes to
-  // `addTicketsToGlobalQueue` are of type `FrontendJiraTicket` (from `../types/planningPoker`)
-  // and include the `url` (e.g., by calling `jiraService.getTicketUrl(t.key)`).
-
-  /**
-   * Joins an existing planning poker session
-   */
-  const handleJoinSession = () => {
-    if (!userName.trim()) {
-      setWsError('Please enter your name.');
-      return;
-    }
-    if (!sessionIdToJoin.trim()) {
-      setWsError('Please enter a Session ID to join.');
-      return;
-    }
-    setWsError(null);
-    setIsLoading(true);
-    console.log('[PlanningPoker.tsx] Joining session:', sessionIdToJoin);
-    planningPokerWsService.joinSession(sessionIdToJoin.trim(), userName.trim());
-  };
-
-  /**
-   * Removes a ticket from the queue
-   * @param ticketKey - The key of the ticket to remove
-   */
-  const handleRemoveTicketFromQueue = (ticketKey: string) => {
-    // This will emit an event to the server, which then broadcasts the updated queue
-    removeTicketFromGlobalQueue(ticketKey);
-  };
-
-  // Example of how clearing the queue would be handled if there was a UI button for it:
-  // const handleClearGlobalPbrQueue = () => {
-  //  clearGlobalQueue();
-  // };
-
-  /**
-   * Starts voting on the current ticket
-   */
-  const handleStartVoting = () => {
-    setIsLoading(true);
-    if (session?.id && session.currentTicketKey) {
-      planningPokerWsService.startVoting(session.id, session.currentTicketKey);
-    } else if (session?.id && session.tickets.length > 0 && !session.currentTicketKey) {
-      planningPokerWsService.startVoting(session.id, session.tickets[0].key);
-    } else {
-      setIsLoading(false); // No action taken
-    }
-  };
-
-  /**
-   * Submits a vote for the current ticket
-   * @param voteValue - The story point value to vote for
-   */
-  const handleVote = (voteValue: string) => {
-    if (session?.id && me && !me.hasVoted && session.votingOpen) {
-      setIsLoading(true); // Indicate activity while vote is sent
-      planningPokerWsService.submitVote(session.id, voteValue);
-      // Note: The loading state will be cleared when we receive the session update
-    }
-  };
-
-  /**
-   * Reveals all votes for the current ticket
-   */
-  const handleRevealVotes = () => {
-    if (session?.id && me?.isHost) {
-      setIsLoading(true);
-      planningPokerWsService.revealVotes(session.id);
-    }
-  };
-
-  /**
-   * Moves to the next ticket in the session
-   */
-  const handleNextTicket = () => {
-    if (session?.id && me?.isHost) {
-      setIsLoading(true);
-      planningPokerWsService.nextTicket(session.id);
-    }
-  };
-
-  /**
-   * Clears the current session and returns to initial view
-   */
-  const handleClearSession = () => {
-    if (session?.id && me?.isHost) {
-      setIsLoading(true);
-      planningPokerWsService.clearSession(session.id);
-      // The session state will be cleared when we receive the sessionTerminated event
-    }
-  };
-
-  const handleLeaveSession = () => {
-    if (session?.id) {
-      setIsLoading(true);
-      planningPokerWsService.leaveSession(session.id);
-      // The session state will be cleared when we receive the sessionTerminated event
-    }
-  };
-
-  // --- Render logic starts here ---
-
-  if (isLoading && !session) { // Initial loading state
+  // Loading state
+  if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Connecting to session server...</Typography>
       </Box>
     );
   }
 
-  // Initial View: Enter Name, Create/Join Session
+  // Error state
+  if (error) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4, px: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button variant="contained" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
+
+  // No session state
   if (!session) {
     return (
-      <Box sx={{ maxWidth: 600, margin: 'auto', p: { xs: 2, sm: 3 } }}>
-        <Fade in={true}>
-          <StyledPaper elevation={3}>
-            <Box sx={{ textAlign: 'center', mb: 4 }}>
-              <CasinoIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-              <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600 }}>
-                Planning Poker
+      <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4, px: 2 }}>
+        <StyledPaper>
+          <Typography variant="h4" gutterBottom>
+            Planning Poker
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Create a new planning poker session or join an existing one to start estimating story points with your team.
+          </Typography>
+          
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Create New Session
               </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Create or join a real-time Planning Poker session with your team
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Start a new planning poker session and invite your team to join.
               </Typography>
-            </Box>
-
-            {wsError && (
-              <Fade in={!!wsError}>
-                <Alert 
-                  severity={wsError.includes('left') || wsError.includes('ended') ? 'info' : 'error'} 
-                  sx={{ mb: 3 }}
-                  onClose={() => setWsError(null)}
-                >
-                  {wsError}
-                </Alert>
-              </Fade>
-            )}
-
-            <TextField
-              label="Your Name"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              fullWidth
-              margin="normal"
-              disabled={isLoading}
-              variant="outlined"
-              sx={{ mb: 2 }}
-            />
-
-            <Stack spacing={2}>
               <Button
                 variant="contained"
-                color="primary"
+                size="large"
                 onClick={handleCreateSession}
+                disabled={!user?.email}
+                startIcon={<CasinoIcon />}
                 fullWidth
-                disabled={isLoading || globalPbrQueue.length === 0}
-                startIcon={<PlayArrowIcon />}
-                size="large"
               >
-                Create New Session
+                Create Session
               </Button>
-              <Typography variant="caption" display="block" textAlign="center" color="text.secondary">
-                (Requires tickets in the PBR Queue below)
-              </Typography>
+            </Box>
 
-              <Divider sx={{ my: 2 }}>or</Divider>
-
-              <TextField
-                label="Session ID to Join"
-                value={sessionIdToJoin}
-                onChange={(e) => setSessionIdToJoin(e.target.value)}
-                fullWidth
-                margin="normal"
-                disabled={isLoading}
-                variant="outlined"
-              />
-              <Button
-                variant="outlined"
-                color="primary"
-                onClick={handleJoinSession}
-                fullWidth
-                disabled={isLoading}
-                size="large"
-              >
+            <Box>
+              <Typography variant="h6" gutterBottom>
                 Join Existing Session
-              </Button>
-            </Stack>
-          </StyledPaper>
-        </Fade>
-
-        {/* PBR Queue Info */}
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="body1" color="text.secondary">
-            {globalPbrQueue.length > 0 
-              ? `${globalPbrQueue.length} ticket${globalPbrQueue.length === 1 ? '' : 's'} in the PBR Queue`
-              : 'No tickets in the PBR Queue. Add tickets using the Jira Ticket Selector.'}
-          </Typography>
-        </Box>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Join an existing planning poker session using the session ID.
+              </Typography>
+              <JoinSessionForm />
+            </Box>
+          </Stack>
+        </StyledPaper>
       </Box>
     );
   }
 
-  // --- Session Active View (Lobby, Voting, Results) ---
-  // This part will be built out in subsequent steps.
-  // For now, just display basic session info.
-  const me = session.users.find(u => u.id === myUserId);
-  const currentTicket = session.currentTicketKey && session.tickets
-    ? session.tickets.find(t => t.key === session.currentTicketKey)
-    : null;
-
-  const getVoteCounts = () => {
-    if (!session || !session.votesRevealed) return {};
-    const counts: Record<string, number> = {};
-    session.users.forEach(user => {
-      if (user.vote) {
-        counts[user.vote] = (counts[user.vote] || 0) + 1;
-      }
-    });
-    return counts;
-  };
-  const voteCounts = getVoteCounts();
+  // Find current user
+  const currentUser = session.users.find(u => u.name === user?.email);
+  if (!currentUser) {
+    return (
+      <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4, px: 2 }}>
+        <Alert severity="error">
+          You are not a participant in this session.
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, sm: 3 } }}>
-      <Fade in={true}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-            <Typography variant="h4" sx={{ flex: 1, minWidth: 200 }}>
-              Planning Poker Session
-            </Typography>
-            <Stack direction="row" spacing={1}>
-              <Chip
-                label={`Session ID: ${session.id}`}
-                color="primary"
-                variant="outlined"
-                sx={{ fontWeight: 500 }}
+    <Box sx={{ maxWidth: 1200, mx: 'auto', mt: 4, px: 2 }}>
+      {showSessionCreatedMessage && (
+        <Alert 
+          severity="success" 
+          sx={{ mb: 3 }}
+          onClose={() => setShowSessionCreatedMessage(false)}
+        >
+          <Typography variant="body1" gutterBottom>
+            <strong>Session created successfully!</strong>
+          </Typography>
+          <Typography variant="body2">
+            Share the session ID above with your team members so they can join. 
+            They can click on the session ID to copy it to their clipboard.
+          </Typography>
+        </Alert>
+      )}
+      
+      <SessionHeader session={session} isConnected={isConnected} />
+      
+      <Grid container spacing={3}>
+        {/* Left Column */}
+        <Grid item xs={12} md={8}>
+          <Stack spacing={3}>
+            {session.currentTicketKey && (
+              <CurrentTicketDisplay 
+                ticket={session.tickets.find(t => t.key === session.currentTicketKey)!}
+                votingOpen={session.votingOpen}
+                votesRevealed={session.votesRevealed}
+                discussionPhase={session.discussionPhase}
               />
-              {me?.isHost && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleClearSession}
-                  disabled={isLoading}
-                  startIcon={<DeleteIcon />}
-                >
-                  Clear Session
-                </Button>
-              )}
-              {!me?.isHost && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleLeaveSession}
-                  disabled={isLoading}
-                  startIcon={<DeleteIcon />}
-                >
-                  Leave Session
-                </Button>
-              )}
-            </Stack>
-          </Box>
+            )}
+            
+            <VotingCards
+              onVote={handleVote}
+              currentUser={currentUser}
+              votingOpen={session.votingOpen}
+              votesRevealed={session.votesRevealed}
+              discussionPhase={session.discussionPhase}
+            />
+            
+            <VotingResults
+              session={session}
+              currentUser={currentUser}
+            />
+            
+            <ActionButtons
+              session={session}
+              currentUser={currentUser}
+              onStartVoting={handleStartVoting}
+              onRevealVotes={handleRevealVotes}
+              onNextTicket={handleNextTicket}
+              onClearSession={handleClearSession}
+              onCloseSession={handleCloseSession}
+              onLeaveSession={handleLeaveSession}
+              onRestartVoting={handleRestartVoting}
+              onSetFinalEstimation={handleSetFinalEstimation}
+            />
+            
+            <EstimatedItemsList
+              finalEstimations={session.finalEstimations}
+              tickets={session.tickets}
+            />
+          </Stack>
+        </Grid>
 
-          {wsError && (
-            <Fade in={!!wsError}>
-              <Alert severity="error" sx={{ mb: 3 }}>{wsError}</Alert>
-            </Fade>
-          )}
-
-          <Grid container spacing={3}>
-            {/* Participants List */}
-            <Grid item xs={12} md={4}>
-              <ParticipantsCard
-                votingStatus={
-                  session.votingOpen
-                    ? (session.users.every(user => user.hasVoted)
-                        ? 'complete'
-                        : 'voting')
-                    : 'waiting'
-                }
-              >
-                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <GroupIcon color="primary" />
-                  Participants ({session.users.length})
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'center' }}>
-                  {session.users.map(user => (
-                    <Box
-                      key={user.id}
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        position: 'relative',
-                      }}
-                    >
-                      <Avatar
-                        sx={{
-                          bgcolor: getPastelColor(user.name),
-                          width: 48,
-                          height: 48,
-                          fontSize: '1.1rem',
-                          fontWeight: 'bold',
-                          color: 'text.primary',
-                          border: user.isHost ? '2px solid' : 'none',
-                          borderColor: 'primary.main',
-                          mb: 0.5,
-                          transition: 'all 0.3s ease',
-                          ...(session.votingOpen && user.hasVoted && {
-                            boxShadow: '0 0 0 2px #4caf50',
-                          }),
-                        }}
-                      >
-                        {getInitials(user.name)}
-                      </Avatar>
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
-                          textAlign: 'center',
-                          maxWidth: 80,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          fontWeight: user.id === myUserId ? 600 : 400,
-                        }}
-                      >
-                        {user.name}
-                        {user.isHost && ' (H)'}
-                      </Typography>
-                      <Typography 
-                        variant="caption" 
-                        color="text.secondary"
-                        sx={{ 
-                          textAlign: 'center',
-                          maxWidth: 80,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {session.votesRevealed
-                          ? `Voted: ${user.vote || 'N/A'}`
-                          : (session.votingOpen
-                            ? (user.hasVoted ? 'Voted' : 'Waiting...')
-                            : '')}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              </ParticipantsCard>
-            </Grid>
-
-            {/* Current Ticket & Voting Area */}
-            <Grid item xs={12} md={8}>
-              {currentTicket ? (
-                <StyledPaper>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                      <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                        {currentTicket.key}
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary" sx={{ flex: 1 }}>
-                        {currentTicket.summary}
-                      </Typography>
-                      <Button
-                        component="a"
-                        href={currentTicket.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        variant="outlined"
-                        size="small"
-                      >
-                        View in Jira
-                      </Button>
-                    </Box>
-                    {currentTicket.description && (
-                      <Typography variant="body2" sx={{ mt: 2, whiteSpace: 'pre-wrap', color: 'text.secondary' }}>
-                        {currentTicket.description}
-                      </Typography>
-                    )}
-
-                    {/* Voting UI */}
-                    <Box sx={{ mt: 4 }}>
-                      <Typography variant="h6" gutterBottom>
-                        {session.votingOpen 
-                          ? (me?.hasVoted 
-                            ? 'Your Vote Has Been Submitted'
-                            : 'Cast Your Vote')
-                          : (session.votesRevealed 
-                            ? 'Voting Results'
-                            : 'Waiting for host to start voting...')}
-                      </Typography>
-                      <Grid container spacing={1} justifyContent="center">
-                        {FIBONACCI_CARDS.map((cardValue) => (
-                          <Grid item key={cardValue}>
-                            <VoteButton
-                              variant={me?.vote === cardValue ? "contained" : "outlined"}
-                              color={me?.vote === cardValue ? "primary" : "inherit"}
-                              onClick={() => handleVote(cardValue)}
-                              disabled={
-                                !session.votingOpen || 
-                                !!me?.hasVoted || 
-                                session.votesRevealed ||
-                                isLoading
-                              }
-                              sx={{
-                                opacity: me?.hasVoted && me?.vote !== cardValue ? 0.5 : 1,
-                                transition: 'all 0.2s ease-in-out',
-                                '&:hover': {
-                                  transform: !me?.hasVoted && session.votingOpen ? 'translateY(-2px)' : 'none',
-                                  boxShadow: !me?.hasVoted && session.votingOpen ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
-                                }
-                              }}
-                            >
-                              {cardValue}
-                            </VoteButton>
-                          </Grid>
-                        ))}
-                      </Grid>
-                      {me?.hasVoted && !session.votesRevealed && (
-                        <Typography sx={{ mt: 2, textAlign: 'center' }} color="text.secondary">
-                          Your vote: {me.vote} (Waiting for others...)
-                        </Typography>
-                      )}
-                    </Box>
-
-                    {/* Results Display */}
-                    {session.votesRevealed && currentTicket && (
-                      <Box sx={{ mt: 4 }}>
-                        <Typography variant="h6" gutterBottom>
-                          Voting Results
-                        </Typography>
-                        <Grid container spacing={2}>
-                          {Object.entries(voteCounts).map(([voteValue, count]) => {
-                            // Get list of voters for this value
-                            const voters = session.users
-                              .filter(user => user.vote === voteValue)
-                              .map(user => user.name);
-                            
-                            return (
-                              <Grid item xs={12} sm={6} md={4} key={voteValue}>
-                                <Paper
-                                  elevation={0}
-                                  sx={{
-                                    p: 2,
-                                    textAlign: 'center',
-                                    bgcolor: 'background.default',
-                                    borderRadius: 2,
-                                    height: '100%',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                  }}
-                                >
-                                  <Typography variant="h4" color="primary" sx={{ mb: 1 }}>
-                                    {voteValue}
-                                  </Typography>
-                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                    {count} vote{count !== 1 ? 's' : ''}
-                                  </Typography>
-                                  <Box sx={{ mt: 'auto', pt: 1 }}>
-                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                      {voters.join(', ')}
-                                    </Typography>
-                                  </Box>
-                                </Paper>
-                              </Grid>
-                            );
-                          })}
-                        </Grid>
-                      </Box>
-                    )}
-                  </CardContent>
-
-                  <CardActions sx={{ justifyContent: 'space-between', p: 2, flexWrap: 'wrap', gap: 1 }}>
-                    {/* User status / action prompts */}
-                    <Box>
-                      {!me?.isHost && session.votingOpen && !me?.hasVoted && !session.votesRevealed && (
-                        <Typography color="text.secondary">Please cast your vote.</Typography>
-                      )}
-                      {!me?.isHost && session.votingOpen && me?.hasVoted && !session.votesRevealed && (
-                        <Typography color="text.secondary">Vote submitted. Waiting for host to reveal.</Typography>
-                      )}
-                      {!me?.isHost && !session.votingOpen && session.votesRevealed && currentTicket && (
-                        <Typography color="text.secondary">Voting closed. Waiting for next ticket.</Typography>
-                      )}
-                      {!me?.isHost && !session.votingOpen && !session.votesRevealed && currentTicket && (
-                        <Typography color="text.secondary">Waiting for host to start voting...</Typography>
-                      )}
-                    </Box>
-
-                    {/* Host Actions */}
-                    {me?.isHost && (
-                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                        {!session.votingOpen && !session.votesRevealed && currentTicket && (
-                          <ActionButton
-                            variant="contained"
-                            onClick={handleStartVoting}
-                            disabled={isLoading}
-                            startIcon={<PlayArrowIcon />}
-                          >
-                            Start Voting
-                          </ActionButton>
-                        )}
-                        {session.votingOpen && !session.votesRevealed && (
-                          <ActionButton
-                            variant="contained"
-                            color="secondary"
-                            onClick={handleRevealVotes}
-                            disabled={isLoading}
-                            startIcon={<VisibilityIcon />}
-                          >
-                            Reveal Votes
-                          </ActionButton>
-                        )}
-                        {session.votesRevealed && currentTicket && (
-                          <ActionButton
-                            variant="contained"
-                            onClick={handleNextTicket}
-                            disabled={isLoading}
-                            startIcon={<NavigateNextIcon />}
-                          >
-                            {session.tickets.findIndex(t => t.key === currentTicket.key) < session.tickets.length - 1
-                              ? 'Next Ticket'
-                              : 'End Session'}
-                          </ActionButton>
-                        )}
-                      </Stack>
-                    )}
-                  </CardActions>
-                </StyledPaper>
-              ) : (
-                <StyledPaper sx={{ textAlign: 'center', p: 4 }}>
-                  <Typography variant="h5" gutterBottom>
-                    {session.tickets.length > 0 && session.currentTicketKey === null && session.votesRevealed
-                      ? 'All tickets have been estimated!'
-                      : (session.tickets.length > 0
-                        ? 'Waiting for host to select a ticket or start voting...'
-                        : 'No tickets loaded in this session.')}
-                  </Typography>
-                  {me?.isHost && session.tickets.length > 0 && session.currentTicketKey === null && session.votesRevealed && (
-                    <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                      You can review the PBR queue or start a new session.
-                    </Typography>
-                  )}
-                  {me?.isHost && session.tickets.length === 0 && (
-                    <Typography variant="body1" color="text.secondary" sx={{ mt: 2 }}>
-                      Please add tickets to the PBR queue and create a new session to begin.
-                    </Typography>
-                  )}
-                </StyledPaper>
-              )}
-            </Grid>
-          </Grid>
-        </Box>
-      </Fade>
+                 {/* Right Column */}
+         <Grid item xs={12} md={4}>
+           <Stack spacing={3}>
+             <ParticipantsList users={session.users} />
+           </Stack>
+         </Grid>
+      </Grid>
     </Box>
   );
 }

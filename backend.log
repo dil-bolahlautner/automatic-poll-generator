@@ -1,0 +1,1082 @@
+
+> automatic-poll-generator-backend@1.0.0 dev
+> tsx watch src/server.ts
+
+PlanningPokerService initialized. Sessions and Global PBR Queue cleared. Waiting for WebSocketService.
+Loading environment variables...
+Environment Variables:
+PORT: 3001
+FRONTEND_URL: http://localhost:3000
+JIRA_HOST: https://diligentbrands.atlassian.net
+CONFLUENCE_HOST: https://diligentbrands.atlassian.net
+AZURE_TENANT_ID: 80359a55-fc53-4acf-af25-a2e6e3ebf779
+🔍 Validating environment configuration...
+✅ All environment variables are valid
+Initializing Express application...
+Configuring middleware...
+Registering API routes...
+Initializing WebSocket service...
+WebSocketService injected into PlanningPokerService.
+Server is running on port 3001
+Frontend URL: http://localhost:3000
+[SECURITY] UNAUTHORIZED_ACCESS - MEDIUM - IP: ::1 - User: anonymous - /api/jira/tickets { reason: 'No token provided' }
+JWT verification failed: TokenExpiredError: jwt expired
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:190:21
+    at getSecret (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:97:14)
+    at module.exports [as verify] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:101:10)
+    at Function.verifyToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/utils/jwtUtils.ts:27:27)
+    at authenticateToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/middleware/authMiddleware.ts:43:30)
+    at Layer.handle [as handle_request] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:328:13)
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:346:12)
+    at next (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:280:10) {
+  expiredAt: 2026-01-14T17:44:51.000Z
+}
+[SECURITY] INVALID_TOKEN - HIGH - IP: ::1 - User: anonymous - /api/jira/tickets { reason: 'Token verification failed' }
+JWT verification failed: TokenExpiredError: jwt expired
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:190:21
+    at getSecret (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:97:14)
+    at module.exports [as verify] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:101:10)
+    at Function.verifyToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/utils/jwtUtils.ts:27:27)
+    at authenticateToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/middleware/authMiddleware.ts:43:30)
+    at Layer.handle [as handle_request] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/layer.js:95:5)
+    at trim_prefix (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:328:13)
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:286:9
+    at Function.process_params (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:346:12)
+    at next (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/express/lib/router/index.js:280:10) {
+  expiredAt: 2026-01-14T17:44:51.000Z
+}
+[SECURITY] INVALID_TOKEN - HIGH - IP: ::1 - User: anonymous - /api/jira/fix-versions { reason: 'Token verification failed' }
+User connected with socket ID: tR48rI7pT-AAr7-AAAAC
+JWT verification failed: TokenExpiredError: jwt expired
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:190:21
+    at getSecret (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:97:14)
+    at module.exports [as verify] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:101:10)
+    at Function.verifyToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/utils/jwtUtils.ts:27:27)
+    at Namespace.<anonymous> (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/services/websocketService.ts:103:40)
+    at Namespace.emit (node:events:524:28)
+    at Namespace.emitReserved (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/typed-events.js:56:22)
+    at Namespace._doConnect (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/namespace.js:276:14)
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/namespace.js:238:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+  expiredAt: 2026-01-14T17:44:51.000Z
+}
+Invalid token provided by socket tR48rI7pT-AAr7-AAAAC
+User connected with socket ID: S3p9do8cMhh9n8RgAAAD
+JWT verification failed: TokenExpiredError: jwt expired
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:190:21
+    at getSecret (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:97:14)
+    at module.exports [as verify] (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/jsonwebtoken/verify.js:101:10)
+    at Function.verifyToken (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/utils/jwtUtils.ts:27:27)
+    at Namespace.<anonymous> (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend/src/services/websocketService.ts:103:40)
+    at Namespace.emit (node:events:524:28)
+    at Namespace.emitReserved (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/typed-events.js:56:22)
+    at Namespace._doConnect (/Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/namespace.js:276:14)
+    at /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/node_modules/socket.io/dist/namespace.js:238:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+  expiredAt: 2026-01-14T17:44:51.000Z
+}
+Invalid token provided by socket S3p9do8cMhh9n8RgAAAD
+User disconnected with socket ID: S3p9do8cMhh9n8RgAAAD
+User S3p9do8cMhh9n8RgAAAD disconnected and removed from all sessions
+[SECURITY] UNAUTHORIZED_ACCESS - MEDIUM - IP: ::1 - User: anonymous - /api/jira/tickets { reason: 'No token provided' }
+[SECURITY] UNAUTHORIZED_ACCESS - MEDIUM - IP: ::1 - User: anonymous - /api/jira/fix-versions { reason: 'No token provided' }
+User connected with socket ID: Teb54-UrblFFRaEfAAAG
+User authenticated: bolahlautner@diligent.com (1)
+User connected with socket ID: gVS0ct8RpDzTUYIBAAAH
+User authenticated: bolahlautner@diligent.com (1)
+
+=== JIRA API CALL START ===
+JQL Query: project = "QST" AND status IN ("To Do", Backlog) AND type in (Story, Bug) AND Sprint = 6660 ORDER BY created DESC
+JIRA Base URL: https://diligentbrands.atlassian.net/rest/api/3
+Auth configured: {
+  host: 'https://diligentbrands.atlassian.net',
+  username: '***',
+  token: '***'
+}
+
+Fetching page 1...
+JIRA API Response: {
+  total: undefined,
+  maxResults: undefined,
+  startAt: undefined,
+  isLast: false,
+  nextPageToken: 'Ck1jcmVhdGVkJmNyZWF0ZWQmT1JERVJfREVTQyNMb25nJk1UYzBNalExT0RFeU9EazJNUT09JVN0cmluZyZVVk5VJUludCZOVEkxTlE9PRBkGKvG4fm_MyJxcHJvamVjdCA9ICJRU1QiIEFORCBzdGF0dXMgSU4gKCJUbyBEbyIsIEJhY2tsb2cpIEFORCB0eXBlIGluIChTdG9yeSwgQnVnKSBBTkQgU3ByaW50ID0gNjY2MCBPUkRFUiBCWSBjcmVhdGVkIERFU0MqAltd',
+  issuesCount: 100,
+  responseKeys: [ 'issues', 'nextPageToken', 'isLast' ],
+  firstIssue: {
+    key: 'QST-6286',
+    fields: [
+      'summary',    'issuetype',
+      'parent',     'subtasks',
+      'issuelinks', 'reporter',
+      'assignee',   'fixVersions',
+      'status',     'labels'
+    ]
+  }
+}
+
+Fetching page 2...
+JIRA API Response: {
+  total: undefined,
+  maxResults: undefined,
+  startAt: undefined,
+  isLast: true,
+  nextPageToken: undefined,
+  issuesCount: 21,
+  responseKeys: [ 'issues', 'isLast' ],
+  firstIssue: {
+    key: 'QST-5254',
+    fields: [
+      'summary',
+      'issuetype',
+      'subtasks',
+      'issuelinks',
+      'reporter',
+      'assignee',
+      'fixVersions',
+      'status',
+      'labels'
+    ]
+  }
+}
+Breaking pagination: {
+  issuesLength: 21,
+  allIssuesLength: 121,
+  isLast: true,
+  nextPageToken: undefined
+}
+
+Total issues collected: 121
+
+Transformed response: {
+  ticketsCount: 121,
+  total: 0,
+  sampleTicket: {
+    key: 'QST-6286',
+    summary: 'Builder - Remove title placeholder on the question card',
+    type: 'Bug',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Nándor Biszak',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5812', summary: 'Bug fixing collector' }
+  }
+}
+=== JIRA API CALL END ===
+
+Received client.pbrQueue.add from gVS0ct8RpDzTUYIBAAAH: {
+  tickets: [
+    {
+      key: 'QST-6278',
+      summary: 'Investigate why the background services for org sync no longer appear to start in main',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6278',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Peter Hemstad'
+    },
+    {
+      key: 'QST-6279',
+      summary: 'Create URL factory for API calls in the frontend and tests',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6279',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Máté Kovács'
+    },
+    {
+      key: 'QST-6280',
+      summary: 'Row JSON mock data',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6280',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Máté Kovács'
+    },
+    {
+      key: 'QST-6282',
+      summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6282',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Máté Kovács'
+    },
+    {
+      key: 'QST-6286',
+      summary: 'Builder - Remove title placeholder on the question card',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6286',
+      type: 'Bug',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Nándor Biszak'
+    }
+  ]
+}
+[WebSocketService] Adding tickets to global PBR queue: [
+  {
+    key: 'QST-6278',
+    summary: 'Investigate why the background services for org sync no longer appear to start in main',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6278',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Peter Hemstad'
+  },
+  {
+    key: 'QST-6279',
+    summary: 'Create URL factory for API calls in the frontend and tests',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6279',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Máté Kovács'
+  },
+  {
+    key: 'QST-6280',
+    summary: 'Row JSON mock data',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6280',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Máté Kovács'
+  },
+  {
+    key: 'QST-6282',
+    summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6282',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Máté Kovács'
+  },
+  {
+    key: 'QST-6286',
+    summary: 'Builder - Remove title placeholder on the question card',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6286',
+    type: 'Bug',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Nándor Biszak'
+  }
+]
+Added 5 tickets to global PBR queue. Total: 5
+[WebSocketService] Queue updated successfully: [
+  {
+    key: 'QST-6278',
+    summary: 'Investigate why the background services for org sync no longer appear to start in main',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Peter Hemstad',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6278',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: undefined
+  },
+  {
+    key: 'QST-6279',
+    summary: 'Create URL factory for API calls in the frontend and tests',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6279',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6280',
+    summary: 'Row JSON mock data',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6280',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6282',
+    summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6282',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6286',
+    summary: 'Builder - Remove title placeholder on the question card',
+    type: 'Bug',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Nándor Biszak',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6286',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5812', summary: 'Bug fixing collector' }
+  }
+]
+Broadcasting server.pbrQueue.updated to 3 clients.
+Received client.pbrQueue.add from gVS0ct8RpDzTUYIBAAAH: {
+  tickets: [
+    {
+      key: 'QST-6218',
+      summary: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6218',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [Array],
+      blockingIssues: [],
+      reporter: 'Peter Hemstad'
+    },
+    {
+      key: 'QST-6227',
+      summary: '[SPIKE] Check DBO changes are not introducing migrations',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6227',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Zoltán Péter Gaál'
+    },
+    {
+      key: 'QST-6243',
+      summary: 'Extend delete answer endpoint with response state',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6243',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [Array],
+      blockingIssues: [Array],
+      reporter: 'Balázs Berta'
+    },
+    {
+      key: 'QST-6249',
+      summary: 'Enforce Question-under-Question Nesting Depth Limit',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6249',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [Array],
+      blockingIssues: [Array],
+      reporter: 'Balázs Berta'
+    },
+    {
+      key: 'QST-6261',
+      summary: 'Clean-up of certificates in AWS',
+      url: 'https://diligentbrands.atlassian.net/browse/QST-6261',
+      type: 'Story',
+      status: 'To Do',
+      labels: [Array],
+      fixVersions: [Array],
+      linkedIssues: [],
+      blockingIssues: [],
+      reporter: 'Peter Hemstad'
+    }
+  ]
+}
+[WebSocketService] Adding tickets to global PBR queue: [
+  {
+    key: 'QST-6218',
+    summary: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6218',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [],
+    reporter: 'Peter Hemstad'
+  },
+  {
+    key: 'QST-6227',
+    summary: '[SPIKE] Check DBO changes are not introducing migrations',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6227',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Zoltán Péter Gaál'
+  },
+  {
+    key: 'QST-6243',
+    summary: 'Extend delete answer endpoint with response state',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6243',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    reporter: 'Balázs Berta'
+  },
+  {
+    key: 'QST-6249',
+    summary: 'Enforce Question-under-Question Nesting Depth Limit',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6249',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    reporter: 'Balázs Berta'
+  },
+  {
+    key: 'QST-6261',
+    summary: 'Clean-up of certificates in AWS',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6261',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    reporter: 'Peter Hemstad'
+  }
+]
+Added 5 tickets to global PBR queue. Total: 10
+[WebSocketService] Queue updated successfully: [
+  {
+    key: 'QST-6278',
+    summary: 'Investigate why the background services for org sync no longer appear to start in main',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Peter Hemstad',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6278',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: undefined
+  },
+  {
+    key: 'QST-6279',
+    summary: 'Create URL factory for API calls in the frontend and tests',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6279',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6280',
+    summary: 'Row JSON mock data',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6280',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6282',
+    summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Máté Kovács',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6282',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5071', summary: '[M4] Spikes and fixes' }
+  },
+  {
+    key: 'QST-6286',
+    summary: 'Builder - Remove title placeholder on the question card',
+    type: 'Bug',
+    status: 'To Do',
+    labels: [ 'Frontend' ],
+    reporter: 'Nándor Biszak',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6286',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: { key: 'QST-5812', summary: 'Bug fixing collector' }
+  },
+  {
+    key: 'QST-6218',
+    summary: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Peter Hemstad',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6218',
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [],
+    parent: undefined
+  },
+  {
+    key: 'QST-6227',
+    summary: '[SPIKE] Check DBO changes are not introducing migrations',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Zoltán Péter Gaál',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6227',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: undefined
+  },
+  {
+    key: 'QST-6243',
+    summary: 'Extend delete answer endpoint with response state',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Balázs Berta',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6243',
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    parent: { key: 'QST-5812', summary: 'Bug fixing collector' }
+  },
+  {
+    key: 'QST-6249',
+    summary: 'Enforce Question-under-Question Nesting Depth Limit',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Balázs Berta',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6249',
+    fixVersions: [ [Object] ],
+    linkedIssues: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    parent: { key: 'QST-6245', summary: 'Implement Subquestions in 4.x' }
+  },
+  {
+    key: 'QST-6261',
+    summary: 'Clean-up of certificates in AWS',
+    type: 'Story',
+    status: 'To Do',
+    labels: [ 'backend' ],
+    reporter: 'Peter Hemstad',
+    url: 'https://diligentbrands.atlassian.net/browse/QST-6261',
+    fixVersions: [ [Object] ],
+    linkedIssues: [],
+    blockingIssues: [],
+    parent: undefined
+  }
+]
+Broadcasting server.pbrQueue.updated to 3 clients.
+Received tableRows: [
+  {
+    ticketToRefine: 'QST-6278: Investigate why the background services for org sync no longer appear to start in main',
+    taskType: 'BACKEND',
+    description: 'Investigate why the background services for org sync no longer appear to start in main',
+    reporter: 'Peter Hemstad',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6279: Create URL factory for API calls in the frontend and tests',
+    taskType: 'FRONTEND',
+    description: 'Create URL factory for API calls in the frontend and tests',
+    reporter: 'Máté Kovács',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6280: Row JSON mock data',
+    taskType: 'FRONTEND',
+    description: 'Row JSON mock data',
+    reporter: 'Máté Kovács',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6282: Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    taskType: 'FRONTEND',
+    description: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    reporter: 'Máté Kovács',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6286: Builder - Remove title placeholder on the question card',
+    taskType: 'FRONTEND',
+    description: 'Builder - Remove title placeholder on the question card',
+    reporter: 'Nándor Biszak',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6218: Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+    taskType: 'BACKEND',
+    description: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+    reporter: 'Peter Hemstad',
+    dependingOn: [],
+    linkedIssues: [ [Object] ],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6227: [SPIKE] Check DBO changes are not introducing migrations',
+    taskType: 'BACKEND',
+    description: '[SPIKE] Check DBO changes are not introducing migrations',
+    reporter: 'Zoltán Péter Gaál',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6243: Extend delete answer endpoint with response state',
+    taskType: 'BACKEND',
+    description: 'Extend delete answer endpoint with response state',
+    reporter: 'Balázs Berta',
+    dependingOn: [ 'QST-6197' ],
+    linkedIssues: [ [Object] ],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6249: Enforce Question-under-Question Nesting Depth Limit',
+    taskType: 'BACKEND',
+    description: 'Enforce Question-under-Question Nesting Depth Limit',
+    reporter: 'Balázs Berta',
+    dependingOn: [ 'QST-6250' ],
+    linkedIssues: [ [Object] ],
+    targetVersion: { value: '4.0', isGreen: true }
+  },
+  {
+    ticketToRefine: 'QST-6261: Clean-up of certificates in AWS',
+    taskType: 'BACKEND',
+    description: 'Clean-up of certificates in AWS',
+    reporter: 'Peter Hemstad',
+    dependingOn: [],
+    linkedIssues: [],
+    targetVersion: { value: '4.0', isGreen: true }
+  }
+]
+Processing row: {
+  ticketToRefine: 'QST-6278: Investigate why the background services for org sync no longer appear to start in main',
+  taskType: 'BACKEND',
+  description: 'Investigate why the background services for org sync no longer appear to start in main',
+  reporter: 'Peter Hemstad',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6278 summary: Investigate why the background services for org sync no longer appear to start in main
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6278',
+  summary: 'Investigate why the background services for org sync no longer appear to start in main',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Peter Hemstad',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6279: Create URL factory for API calls in the frontend and tests',
+  taskType: 'FRONTEND',
+  description: 'Create URL factory for API calls in the frontend and tests',
+  reporter: 'Máté Kovács',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6279 summary: Create URL factory for API calls in the frontend and tests
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6279',
+  summary: 'Create URL factory for API calls in the frontend and tests',
+  type: 'FRONTEND',
+  status: '',
+  labels: [],
+  reporter: 'Máté Kovács',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6280: Row JSON mock data',
+  taskType: 'FRONTEND',
+  description: 'Row JSON mock data',
+  reporter: 'Máté Kovács',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6280 summary: Row JSON mock data
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6280',
+  summary: 'Row JSON mock data',
+  type: 'FRONTEND',
+  status: '',
+  labels: [],
+  reporter: 'Máté Kovács',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6282: Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+  taskType: 'FRONTEND',
+  description: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+  reporter: 'Máté Kovács',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6282 summary: Command to create frontend JIRA stories from PRD in Confluence and Figma design
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6282',
+  summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+  type: 'FRONTEND',
+  status: '',
+  labels: [],
+  reporter: 'Máté Kovács',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6286: Builder - Remove title placeholder on the question card',
+  taskType: 'FRONTEND',
+  description: 'Builder - Remove title placeholder on the question card',
+  reporter: 'Nándor Biszak',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6286 summary: Builder - Remove title placeholder on the question card
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6286',
+  summary: 'Builder - Remove title placeholder on the question card',
+  type: 'FRONTEND',
+  status: '',
+  labels: [],
+  reporter: 'Nándor Biszak',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6218: Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+  taskType: 'BACKEND',
+  description: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+  reporter: 'Peter Hemstad',
+  dependingOn: [],
+  linkedIssues: [ { type: 'is blocked by', key: 'QST-6192', direction: 'inward' } ],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6218 summary: Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2
+dependingOn: []
+linkedIssues: [ { type: 'is blocked by', key: 'QST-6192', direction: 'inward' } ]
+Created ticket: {
+  key: 'QST-6218',
+  summary: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Peter Hemstad',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: [ { type: 'is blocked by', key: 'QST-6192', direction: 'inward' } ]
+}
+Processing row: {
+  ticketToRefine: 'QST-6227: [SPIKE] Check DBO changes are not introducing migrations',
+  taskType: 'BACKEND',
+  description: '[SPIKE] Check DBO changes are not introducing migrations',
+  reporter: 'Zoltán Péter Gaál',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6227 summary: [SPIKE] Check DBO changes are not introducing migrations
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6227',
+  summary: '[SPIKE] Check DBO changes are not introducing migrations',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Zoltán Péter Gaál',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Processing row: {
+  ticketToRefine: 'QST-6243: Extend delete answer endpoint with response state',
+  taskType: 'BACKEND',
+  description: 'Extend delete answer endpoint with response state',
+  reporter: 'Balázs Berta',
+  dependingOn: [ 'QST-6197' ],
+  linkedIssues: [ { type: 'blocks', key: 'QST-6197', direction: 'outward' } ],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6243 summary: Extend delete answer endpoint with response state
+dependingOn: [ 'QST-6197' ]
+linkedIssues: [ { type: 'blocks', key: 'QST-6197', direction: 'outward' } ]
+Created ticket: {
+  key: 'QST-6243',
+  summary: 'Extend delete answer endpoint with response state',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Balázs Berta',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [ { key: 'QST-6197', summary: '', status: '', type: '' } ],
+  linkedIssues: [ { type: 'blocks', key: 'QST-6197', direction: 'outward' } ]
+}
+Processing row: {
+  ticketToRefine: 'QST-6249: Enforce Question-under-Question Nesting Depth Limit',
+  taskType: 'BACKEND',
+  description: 'Enforce Question-under-Question Nesting Depth Limit',
+  reporter: 'Balázs Berta',
+  dependingOn: [ 'QST-6250' ],
+  linkedIssues: [ { type: 'blocks', key: 'QST-6250', direction: 'outward' } ],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6249 summary: Enforce Question-under-Question Nesting Depth Limit
+dependingOn: [ 'QST-6250' ]
+linkedIssues: [ { type: 'blocks', key: 'QST-6250', direction: 'outward' } ]
+Created ticket: {
+  key: 'QST-6249',
+  summary: 'Enforce Question-under-Question Nesting Depth Limit',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Balázs Berta',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [ { key: 'QST-6250', summary: '', status: '', type: '' } ],
+  linkedIssues: [ { type: 'blocks', key: 'QST-6250', direction: 'outward' } ]
+}
+Processing row: {
+  ticketToRefine: 'QST-6261: Clean-up of certificates in AWS',
+  taskType: 'BACKEND',
+  description: 'Clean-up of certificates in AWS',
+  reporter: 'Peter Hemstad',
+  dependingOn: [],
+  linkedIssues: [],
+  targetVersion: { value: '4.0', isGreen: true }
+}
+Extracted key: QST-6261 summary: Clean-up of certificates in AWS
+dependingOn: []
+linkedIssues: []
+Created ticket: {
+  key: 'QST-6261',
+  summary: 'Clean-up of certificates in AWS',
+  type: 'BACKEND',
+  status: '',
+  labels: [],
+  reporter: 'Peter Hemstad',
+  fixVersions: [ { id: '', name: '4.0', released: false } ],
+  blockingIssues: [],
+  linkedIssues: []
+}
+Final tickets array: [
+  {
+    key: 'QST-6278',
+    summary: 'Investigate why the background services for org sync no longer appear to start in main',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Peter Hemstad',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6279',
+    summary: 'Create URL factory for API calls in the frontend and tests',
+    type: 'FRONTEND',
+    status: '',
+    labels: [],
+    reporter: 'Máté Kovács',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6280',
+    summary: 'Row JSON mock data',
+    type: 'FRONTEND',
+    status: '',
+    labels: [],
+    reporter: 'Máté Kovács',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6282',
+    summary: 'Command to create frontend JIRA stories from PRD in Confluence and Figma design',
+    type: 'FRONTEND',
+    status: '',
+    labels: [],
+    reporter: 'Máté Kovács',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6286',
+    summary: 'Builder - Remove title placeholder on the question card',
+    type: 'FRONTEND',
+    status: '',
+    labels: [],
+    reporter: 'Nándor Biszak',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6218',
+    summary: 'Move Responder Handlers from Questionnaires Feature to Responses Feature - phase 2',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Peter Hemstad',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: [ [Object] ]
+  },
+  {
+    key: 'QST-6227',
+    summary: '[SPIKE] Check DBO changes are not introducing migrations',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Zoltán Péter Gaál',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  },
+  {
+    key: 'QST-6243',
+    summary: 'Extend delete answer endpoint with response state',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Balázs Berta',
+    fixVersions: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    linkedIssues: [ [Object] ]
+  },
+  {
+    key: 'QST-6249',
+    summary: 'Enforce Question-under-Question Nesting Depth Limit',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Balázs Berta',
+    fixVersions: [ [Object] ],
+    blockingIssues: [ [Object] ],
+    linkedIssues: [ [Object] ]
+  },
+  {
+    key: 'QST-6261',
+    summary: 'Clean-up of certificates in AWS',
+    type: 'BACKEND',
+    status: '',
+    labels: [],
+    reporter: 'Peter Hemstad',
+    fixVersions: [ [Object] ],
+    blockingIssues: [],
+    linkedIssues: []
+  }
+]
+Confluence Configuration Initialized:
+Host: https://diligentbrands.atlassian.net
+Username: bol***
+API Token: ***
+Extracting pageId from URL: https://diligentbrands.atlassian.net/wiki/spaces/DQ/pages/6355812858/QST+PBR+01+27+2026
+pageId (deprecated generateTable): 6355812858
+Fetching Confluence page: https://diligentbrands.atlassian.net/wiki/rest/api/content/6355812858
+Updating Confluence page ID 6355812858, title "QST PBR 01/27/2026", new version 2
+Successfully updated Confluence page ID 6355812858
+User disconnected with socket ID: tR48rI7pT-AAr7-AAAAC
+User tR48rI7pT-AAr7-AAAAC disconnected and removed from all sessions
+User disconnected with socket ID: Teb54-UrblFFRaEfAAAG
+User Teb54-UrblFFRaEfAAAG disconnected and removed from all sessions
+User disconnected with socket ID: gVS0ct8RpDzTUYIBAAAH
+User gVS0ct8RpDzTUYIBAAAH disconnected and removed from all sessions
+1:10:15 PM [tsx] Previous process hasn't exited yet. Force killing...
+npm error Lifecycle script `dev` failed with error:
+npm error code 130
+npm error path /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend
+npm error workspace automatic-poll-generator-backend@1.0.0
+npm error location /Users/bolahlautner/Documents/Repos/Diligent/automatic-poll-generator/backend
+npm error command failed
+npm error command sh -c tsx watch src/server.ts

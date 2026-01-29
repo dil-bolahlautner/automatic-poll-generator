@@ -26,6 +26,7 @@ import {
 } from '@mui/icons-material';
 import { useJira } from '../contexts/JiraContext';
 import { useQueue } from '../contexts/QueueContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -52,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
-  const { tickets } = useJira();
+  const { user, logout } = useAuth();
   const { queue } = useQueue();
 
   const menuItems = [
@@ -157,6 +158,12 @@ export function Layout({ children }: LayoutProps) {
             <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
               QST Ticket Manager
             </Typography>
+            {user?.is_admin && (
+              <Button color="inherit" href="/admin/users">Admin</Button>
+            )}
+            {user && (
+              <Button color="inherit" onClick={logout}>Logout</Button>
+            )}
           </Toolbar>
         </AppBar>
         <Box

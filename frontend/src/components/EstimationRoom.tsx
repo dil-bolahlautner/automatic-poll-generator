@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useEstimation } from '../contexts/EstimationContext';
 import { websocketService } from '../services/websocketService';
 import { EventInfo } from './EventInfo';
-import { Box, Paper, Typography, Button, Grid } from '@mui/material';
+import { Box, Paper, Typography, Button, Grid, Chip, Avatar } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';

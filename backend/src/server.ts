@@ -5,12 +5,19 @@
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 // import { Server } from 'socket.io'; // Will be handled by WebSocketService
 import { jiraRouter } from './routes/jira';
 import confluenceRoutes from './routes/confluence';
 import { teamsRouter } from './routes/teams';
+import { authRouter } from './routes/auth';
+import { authenticateToken, optionalAuth } from './middleware/authMiddleware';
+import { sanitizeInput } from './middleware/validationMiddleware';
+import { errorHandler, notFoundHandler, securityErrorHandler } from './middleware/errorHandler';
+import { validateAndLogEnvironment } from './utils/envValidator';
 // import { v4 as uuidv4 } from 'uuid'; // Likely not needed here anymore if old WS logic is removed
 
 // Import new services
@@ -30,6 +37,12 @@ console.log('CONFLUENCE_HOST:', process.env.CONFLUENCE_HOST);
 console.log('AZURE_TENANT_ID:', process.env.AZURE_TENANT_ID);
 
 try {
+  // Validate environment configuration
+  if (!validateAndLogEnvironment()) {
+    console.error('Environment validation failed. Exiting...');
+    process.exit(1);
+  }
+
   // Initialize Express application and HTTP server
   console.log('Initializing Express application...');
   const app = express();
@@ -37,18 +50,87 @@ try {
 
   // Configure middleware
   console.log('Configuring middleware...');
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+  ];
+  if (process.env.FRONTEND_URL) {
+    // Add the environment variable URL if it's not already in the list
+    if (!allowedOrigins.includes(process.env.FRONTEND_URL)) {
+      allowedOrigins.push(process.env.FRONTEND_URL);
+    }
+  }
+
+  // Security headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "ws:", "wss:"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
+
   app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
+    maxAge: 86400 // 24 hours
   }));
   app.use(express.json());
 
-  // Register API routes
+  // Input sanitization
+  app.use(sanitizeInput);
+
+  // Rate limiting
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: {
+      error: 'Too many authentication attempts',
+      message: 'Please try again later'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per window
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Apply rate limiting to all routes
+  app.use('/api/', apiLimiter);
+
+  // Register API routes with authentication
   console.log('Registering API routes...');
-  app.use('/api/jira', jiraRouter);
-  app.use('/api/confluence', confluenceRoutes);
-  app.use('/api/teams', teamsRouter);
+  app.use('/api/auth', authRouter);
+  app.use('/api/jira', authenticateToken, jiraRouter);
+  app.use('/api/confluence', authenticateToken, confluenceRoutes);
+  app.use('/api/teams', authenticateToken, teamsRouter);
+
+  // Error handling middleware (must be last)
+  app.use(securityErrorHandler);
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   // Initialize and wire up Planning Poker services
   console.log('Initializing WebSocket service...');

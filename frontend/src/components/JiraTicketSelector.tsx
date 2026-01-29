@@ -9,7 +9,7 @@
  * - Sort and filter tickets by various criteria
  */
 
-import React, { useState, useMemo, useEffect } from 'react'; // Added useEffect
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -33,10 +33,8 @@ import {
   Button,
   TableSortLabel,
   TextField,
-  InputAdornment,
   Select,
   MenuItem,
-  FormControl,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -46,16 +44,13 @@ import {
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import SearchIcon from '@mui/icons-material/Search';
 import { useJira } from '../contexts/JiraContext';
-import { JiraTicket as JiraServiceTicket, FixVersion, jiraService, Sprint } from '../services/jiraService'; // Renamed to avoid conflict, added Sprint
-import { JiraTicket as PokerJiraTicket } from '../types/planningPoker'; // For the queue
-import { planningPokerWsService } from '../services/planningPokerWebsocketService'; // Import the service
+import { jiraService, JiraTicket as JiraServiceTicket, FixVersion } from '../services/jiraService';
+import { JiraTicket as PokerJiraTicket } from '../types/planningPoker';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { confluenceService } from '../services/confluenceService';
 import { useSelectedTickets } from '../contexts/SelectedTicketsContext';
 import { useQueue } from '../contexts/QueueContext';
-import { useNavigate } from 'react-router-dom';
 import { SelectChangeEvent } from '@mui/material';
 
 // Type definitions for sorting and table headers
@@ -89,34 +84,16 @@ export const JiraTicketSelector: React.FC = () => {
   const { tickets = [], total = 0, fixVersions = [], isLoading, error: jiraError } = useJira();
   const [selectedVersions, setSelectedVersions] = usePersistedState<string[]>('selectedVersions', []);
   const [isVersionsExpanded, setIsVersionsExpanded] = usePersistedState<boolean>('isVersionsExpanded', false);
-  const { selectedTickets, setSelectedTickets } = useSelectedTickets(); // This context might also need review if it stores tickets for long
-  const { queue, addTicketsToGlobalQueue } = useQueue(); // Use the new method name
+  const { selectedTickets } = useSelectedTickets();
+  const { queue, addTicketsToGlobalQueue } = useQueue();
   const [selectedTicketKeys, setSelectedTicketKeys] = useState<Set<string>>(new Set());
-  const [orderBy, setOrderBy] = usePersistedState<keyof JiraServiceTicket | 'milestone'>('orderBy', 'key'); // Use JiraServiceTicket
+  const [orderBy, setOrderBy] = usePersistedState<keyof JiraServiceTicket | 'milestone'>('orderBy', 'key');
   const [order, setOrder] = usePersistedState<Order>('order', 'asc');
   const [filters, setFilters] = usePersistedState<Record<string, string>>('filters', {});
   const [isConfluenceDialogOpen, setIsConfluenceDialogOpen] = useState(false);
   const [confluencePageUrl, setConfluencePageUrl] = useState('');
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
   const [confluenceError, setConfluenceError] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const [isWsConnected, setIsWsConnected] = useState<boolean>(planningPokerWsService.isConnected());
-
-  useEffect(() => {
-    // Check connection status periodically
-    // This is a simple way to react to connection changes without complex event plumbing
-    // from the service for this specific component's need.
-    const intervalId = setInterval(() => {
-      const currentWsStatus = planningPokerWsService.isConnected();
-      if (currentWsStatus !== isWsConnected) {
-        setIsWsConnected(currentWsStatus);
-      }
-    }, 1000); // Check every second
-
-    return () => {
-      clearInterval(intervalId); // Cleanup on component unmount
-    };
-  }, [isWsConnected]);
 
   /**
    * Toggles the selection of a fix version and clears filters
@@ -146,11 +123,8 @@ export const JiraTicketSelector: React.FC = () => {
     if (!ticket) return;
     
     const isSelected = selectedTickets.some(t => t.key === ticketKey);
-    setSelectedTickets(
-      isSelected 
-        ? selectedTickets.filter(t => t.key !== ticketKey)
-        : [...selectedTickets, ticket]
-    );
+    // Note: This function is not used in the current implementation
+    // but kept for potential future use
   };
 
   /**
@@ -334,23 +308,28 @@ export const JiraTicketSelector: React.FC = () => {
   const handleAddToPBRQueue = () => {
     const rawSelectedTickets = filteredTickets.filter(ticket => selectedTicketKeys.has(ticket.key));
     
-    // Transform to PokerJiraTicket, ensuring 'url' is present and other fields match
+    // Transform to PokerJiraTicket, ensuring all required fields are present
     const ticketsForPokerQueue: PokerJiraTicket[] = rawSelectedTickets.map(ticket => ({
       key: ticket.key,
       summary: ticket.summary,
-      description: (ticket as any).description || undefined, // Assuming description might be missing on JiraServiceTicket
-      url: jiraService.getTicketUrl(ticket.key), // Populate the URL
+      description: (ticket as any).description || undefined,
+      url: jiraService.getTicketUrl(ticket.key),
       type: ticket.type,
       status: ticket.status,
-      // Ensure other optional fields from PokerJiraTicket are handled if necessary
+      labels: ticket.labels || [],
+      fixVersions: ticket.fixVersions || [],
+      linkedIssues: ticket.linkedIssues || [],
+      blockingIssues: ticket.blockingIssues || [],
+      reporter: ticket.reporter
     }));
 
-    addTicketsToGlobalQueue(ticketsForPokerQueue);
-    setSelectedTicketKeys(new Set()); // Clear local selection after adding to global queue
-  };
-
-  const isInQueue = (ticketKey: string) => {
-    return queue.some(ticket => ticket.key === ticketKey);
+    try {
+      addTicketsToGlobalQueue(ticketsForPokerQueue);
+      setSelectedTicketKeys(new Set()); // Clear selection after adding
+    } catch (error) {
+      console.error('[JiraTicketSelector] Error adding tickets to queue:', error);
+      // The error will be handled by the QueueContext and displayed to the user
+    }
   };
 
   const handleSelectTicket = (ticketKey: string) => {
@@ -435,7 +414,7 @@ export const JiraTicketSelector: React.FC = () => {
             variant="contained"
             size="small"
             onClick={handleAddToPBRQueue}
-            disabled={selectedTicketKeys.size === 0 || !isWsConnected}
+            disabled={selectedTicketKeys.size === 0}
             fullWidth={false}
           >
             Add to PBR Queue
@@ -637,31 +616,41 @@ export const JiraTicketSelector: React.FC = () => {
                           headCell.id === 'labels' ? (
                             <Select
                               multiple
-                              value={filters[headCell.id] ? filters[headCell.id].split(',') : []}
+                              value={filters[headCell.id] ? filters[headCell.id].split(',').filter((v: string) => distinctValues[headCell.id as 'labels'].includes(v)) : []}
                               onChange={(event) => {
-                                const value = (event.target.value as string[]).join(',');
-                                setFilters(prev => ({
-                                  ...prev,
-                                  [headCell.id]: value
-                                }));
+                                const value = event.target.value as string[];
+                                // Ha az első opciót (No filter) választja, töröljük a szűrőt
+                                if (value.includes('__NO_FILTER__')) {
+                                  setFilters(prev => ({ ...prev, [headCell.id]: '' }));
+                                } else {
+                                  setFilters(prev => ({ ...prev, [headCell.id]: value.join(',') }));
+                                }
                               }}
                               displayEmpty
                               size="small"
-                              sx={{ 
-                                minWidth: 120,
-                                '& .MuiSelect-select': {
-                                  py: 0.5
-                                }
-                              }}
                               renderValue={(selected) => {
-                                if (selected.length === 0) {
-                                  return <em>All</em>;
+                                if (!selected || selected.length === 0) {
+                                  return <em>No filter</em>;
                                 }
-                                return selected.join(', ');
+                                return (selected as string[]).join(', ');
+                              }}
+                              sx={{ minWidth: 120, '& .MuiSelect-select': { py: 0.5 } }}
+                              MenuProps={{
+                                PaperProps: {
+                                  style: {
+                                    maxHeight: 300,
+                                    width: 200,
+                                  },
+                                },
                               }}
                             >
-                              {distinctValues[headCell.id as keyof typeof distinctValues]?.map((value: string) => (
+                              <MenuItem value="__NO_FILTER__">
+                                <Checkbox checked={!filters[headCell.id] || filters[headCell.id] === ''} />
+                                <em>No filter</em>
+                              </MenuItem>
+                              {distinctValues[headCell.id as 'labels']?.map((value: string) => (
                                 <MenuItem key={value} value={value}>
+                                  <Checkbox checked={filters[headCell.id]?.split(',').includes(value) || false} />
                                   {value}
                                 </MenuItem>
                               ))}
@@ -682,7 +671,7 @@ export const JiraTicketSelector: React.FC = () => {
                               <MenuItem value="">
                                 <em>All</em>
                               </MenuItem>
-                              {distinctValues[headCell.id as keyof typeof distinctValues]?.map((value: string) => (
+                              {distinctValues[headCell.id as 'milestone' | 'status' | 'fixVersions']?.map((value: string) => (
                                 <MenuItem key={value} value={value}>
                                   {value}
                                 </MenuItem>

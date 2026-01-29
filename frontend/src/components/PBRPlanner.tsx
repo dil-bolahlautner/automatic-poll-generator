@@ -18,7 +18,7 @@ import { useQueue } from '../contexts/QueueContext';
 
 export function PBRPlanner() {
   const [pageUrl, setPageUrl] = useState('');
-  const { queue: tickets, removeFromQueue, clearQueue } = useQueue();
+  const { queue: tickets, removeTicketFromGlobalQueue, clearGlobalQueue } = useQueue();
   const [isGeneratingTable, setIsGeneratingTable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +44,7 @@ export function PBRPlanner() {
   };
 
   const handleRemoveTicket = (ticketKey: string) => {
-    removeFromQueue(ticketKey);
+    removeTicketFromGlobalQueue(ticketKey);
   };
 
   return (
@@ -62,7 +62,7 @@ export function PBRPlanner() {
             <Button
               variant="outlined"
               color="error"
-              onClick={clearQueue}
+              onClick={clearGlobalQueue}
               size="small"
             >
               Clear All

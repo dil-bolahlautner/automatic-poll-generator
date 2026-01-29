@@ -1,13 +1,57 @@
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: #FFFDF7;
+  color: #4E260E;
+  font-family: 'Inter', 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+input, select, textarea, button, label, table, th, td {
+  font-family: inherit;
+  font-size: 13px;
+  color: #4E260E;
+}
+
+th, td {
+  word-break: break-word;
+  vertical-align: middle;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  background: #FFF3E0;
+  color: #A67C52;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.MuiPaper-root, .MuiTable-root, .MuiTableCell-root, .MuiTableRow-root {
+  background: #FFF9EC !important;
+  color: #4E260E !important;
+}
+
+.MuiButton-root {
+  border-radius: 8px !important;
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+}
+
+.MuiChip-root {
+  background: #FFE0B2 !important;
+  color: #4E260E !important;
+  font-size: 0.85rem !important;
+  border-radius: 6px !important;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  background: #FFF3E0;
+}
+::-webkit-scrollbar-thumb {
+  background: #FFD54F;
+  border-radius: 8px;
 } 

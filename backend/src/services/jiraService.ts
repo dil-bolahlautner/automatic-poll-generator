@@ -16,7 +16,7 @@ dotenv.config();
 
 // JIRA API configuration
 const jiraHost = process.env.JIRA_HOST || 'https://diligentbrands.atlassian.net';
-const jiraBaseUrl = `${jiraHost}/rest/api/2`;
+const jiraBaseUrl = `${jiraHost}/rest/api/3`;
 const jiraAgileBaseUrl = `${jiraHost}/rest/agile/1.0`;
 
 // Authentication configuration for JIRA API
@@ -24,6 +24,8 @@ const jiraAuth = {
   username: process.env.JIRA_USERNAME || '',
   password: process.env.JIRA_API_TOKEN || ''
 };
+
+
 
 /**
  * Interface representing a JIRA Sprint
@@ -99,29 +101,40 @@ export const jiraService = {
       });
       
       let allIssues: any[] = [];
-      let startAt = 0;
+      let nextPageToken: string | undefined = undefined;
       const maxResults = 100; // JIRA's default page size
       const maxTotalResults = 10000; // Our maximum desired results
+      const maxIterations = 1000; // Safety limit to prevent infinite loops
+      let iterationCount = 0;
       let totalCount = 0;
       
-      // Paginate through all results
-      while (true) {
-        console.log(`\nFetching page ${startAt / maxResults + 1}...`);
+      // Paginate through all results using Jira API v3 pagination
+      while (iterationCount < maxIterations) {
+        iterationCount++;
+        console.log(`\nFetching page ${iterationCount}...`);
         try {
-          const response = await axios.get(`${jiraBaseUrl}/search`, {
+          const params: any = {
+            jql: jiraConfig.defaultFilter,
+            fields: jiraConfig.fields.join(','),
+            maxResults
+          };
+          
+          // Add nextPageToken if we have one (for subsequent pages)
+          if (nextPageToken) {
+            params.nextPageToken = nextPageToken;
+          }
+          
+          const response = await axios.get(`${jiraBaseUrl}/search/jql`, {
             auth: jiraAuth,
-            params: {
-              jql: jiraConfig.defaultFilter,
-              fields: jiraConfig.fields.join(','),
-              startAt,
-              maxResults
-            }
+            params
           });
           
           console.log('JIRA API Response:', {
             total: response.data.total,
             maxResults: response.data.maxResults,
             startAt: response.data.startAt,
+            isLast: response.data.isLast,
+            nextPageToken: response.data.nextPageToken,
             issuesCount: response.data.issues.length,
             responseKeys: Object.keys(response.data),
             firstIssue: response.data.issues[0] ? {
@@ -130,19 +143,29 @@ export const jiraService = {
             } : null
           });
 
-          // Store the total count from the first response
-          if (startAt === 0) {
+          // Store the total count from the first response (if available)
+          if (iterationCount === 1 && response.data.total !== undefined) {
             totalCount = response.data.total;
           }
 
           allIssues = [...allIssues, ...response.data.issues];
           
           // Break if we've reached the end or our maximum desired results
-          if (response.data.issues.length === 0 || allIssues.length >= maxTotalResults) {
+          if (response.data.issues.length === 0 || 
+              allIssues.length >= maxTotalResults ||
+              response.data.isLast === true ||
+              !response.data.nextPageToken) {
+            console.log('Breaking pagination:', {
+              issuesLength: response.data.issues.length,
+              allIssuesLength: allIssues.length,
+              isLast: response.data.isLast,
+              nextPageToken: response.data.nextPageToken
+            });
             break;
           }
           
-          startAt += maxResults;
+          // Set nextPageToken for next iteration
+          nextPageToken = response.data.nextPageToken;
         } catch (error: any) {
           console.error('\nError in JIRA API call:', {
             message: error.message,
@@ -152,6 +175,10 @@ export const jiraService = {
           });
           throw error;
         }
+      }
+
+      if (iterationCount >= maxIterations) {
+        console.warn(`\n⚠️  Reached maximum iteration limit (${maxIterations}). Stopping pagination to prevent infinite loop.`);
       }
 
       console.log('\nTotal issues collected:', allIssues.length);

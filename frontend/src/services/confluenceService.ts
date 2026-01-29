@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { JiraTicket } from './jiraService'; // Ensure this JiraTicket matches the one used in RetroPresentation
+import { getAuthHeaders } from '../utils/authUtils';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Interfaces for Retro Demo Page generation payload
 export interface RetroEpicWithTickets {
@@ -85,6 +86,8 @@ export const confluenceService = {
     const response = await axios.post(`${API_BASE_URL}/api/confluence/table`, {
       pageUrl,
       tableRows
+    }, {
+      headers: getAuthHeaders()
     });
     return response.data;
   },
@@ -100,6 +103,8 @@ export const confluenceService = {
         pageUrl,
         topicsData,
         sprintName
+      }, {
+        headers: getAuthHeaders()
       });
       console.log('Frontend: Received response from retro demo page generation:', response.data);
       return response.data;

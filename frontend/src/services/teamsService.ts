@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthHeaders } from '../utils/authUtils';
 
 class TeamsService {
   private baseUrl: string;
@@ -19,6 +20,8 @@ class TeamsService {
         title,
         question,
         options,
+      }, {
+        headers: getAuthHeaders()
       });
     } catch (error) {
       console.error('Error creating poll:', error);

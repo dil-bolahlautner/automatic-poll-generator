@@ -10,6 +10,9 @@ declare namespace NodeJS {
 interface ImportMetaEnv {
   readonly VITE_JIRA_HOST: string;
   readonly VITE_API_URL: string;
+  readonly VITE_AUTH_API_URL: string;
+  readonly VITE_WEBSOCKET_URL: string;
+  // more env variables...
 }
 
 interface ImportMeta {

@@ -10,6 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { planningPokerService, PlanningPokerService } from './planningPokerService'; // Import the service
 import { JiraTicket } from '../types/planningPoker'; // Assuming JiraTicket might be part of payloads
+import { JWTUtils, JWTPayload } from '../utils/jwtUtils';
 
 /**
  * Payload interfaces for WebSocket events
@@ -58,7 +59,12 @@ class WebSocketService {
    */
   constructor(server: HttpServer, pokerServiceInstance: PlanningPokerService) {
     this.pokerService = pokerServiceInstance;
-    const allowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173'
+    ];
     if (process.env.FRONTEND_URL) {
       // Add the environment variable URL if it's not already in the list
       if (!allowedOrigins.includes(process.env.FRONTEND_URL)) {
@@ -70,8 +76,10 @@ class WebSocketService {
       cors: {
         origin: allowedOrigins,
         methods: ['GET', 'POST'],
+        credentials: true,
       },
-      path: '/socket.io/', // Explicitly set the default path on the server too
+      transports: ['websocket'],
+      path: '/socket.io',
     });
 
     this.initializeListeners();
@@ -84,8 +92,28 @@ class WebSocketService {
   private initializeListeners(): void {
     this.io.on('connection', (socket: Socket) => {
       const socketId = socket.id;
-      // User's actual name/ID might come with join/create messages
       console.log(`User connected with socket ID: ${socketId}`);
+
+      // Authenticate the connection if token is provided
+      const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
+      let authenticatedUser: JWTPayload | null = null;
+
+      if (token) {
+        try {
+          authenticatedUser = JWTUtils.verifyToken(token);
+          if (authenticatedUser) {
+            console.log(`User authenticated: ${authenticatedUser.email} (${authenticatedUser.sub})`);
+            // Store user info in socket for later use
+            (socket as any).user = authenticatedUser;
+          } else {
+            console.warn(`Invalid token provided by socket ${socketId}`);
+          }
+        } catch (error) {
+          console.error(`Token verification failed for socket ${socketId}:`, error);
+        }
+      } else {
+        console.log(`Socket ${socketId} connected without authentication token`);
+      }
 
       // Send current global PBR queue to the newly connected client
       try {
@@ -98,11 +126,10 @@ class WebSocketService {
       
       // --- Global PBR Queue Event Handlers ---
 
-      socket.on('client.pbrQueue.add', (payload: AddToPbrQueuePayload) => {
+      socket.on('client.pbrQueue.add', async (payload: AddToPbrQueuePayload) => {
         console.log(`Received client.pbrQueue.add from ${socketId}:`, payload);
         try {
-          this.pokerService.addTicketsToGlobalPbrQueue(payload.tickets);
-          // pokerService will trigger broadcast via broadcastGlobalPbrQueueUpdate
+          await this.handleAddTicketsToGlobalQueue(socket, payload.tickets);
         } catch (error: any) {
           console.error(`Error adding tickets to global PBR queue for ${socketId}:`, error);
           socket.emit('error', { message: 'Failed to add tickets to PBR queue: ' + error.message });
@@ -160,17 +187,22 @@ class WebSocketService {
         try {
           const session = this.pokerService.joinSession(payload.sessionId, payload.userName, socketId);
           if (session) {
-            socket.join(payload.sessionId); // Join the socket.io room for this session
-            // Send session update to the joining user
-            socket.emit('sessionJoined', session);
-            // Broadcast to all users in the session
-            this.io.to(payload.sessionId).emit('sessionUpdate', session);
+            // Join the socket.io room for this session
+            socket.join(payload.sessionId);
+            // Send immediate confirmation to the joining user
+            socket.emit('sessionUpdated', session);
+            // Broadcast the update to all other users in the session
+            socket.to(payload.sessionId).emit('sessionUpdated', session);
           } else {
-            socket.emit('error', { message: `Failed to join session ${payload.sessionId}. Session not found or user already in session.` });
+            socket.emit('error', { 
+              message: `Failed to join session ${payload.sessionId}. Session not found or user already in session.` 
+            });
           }
         } catch (error: any) {
           console.error(`Error joining session for ${socketId}:`, error);
-          socket.emit('error', { message: 'Failed to join session: ' + error.message });
+          socket.emit('error', { 
+            message: `Failed to join session: ${error.message}` 
+          });
         }
       });
 
@@ -203,12 +235,14 @@ class WebSocketService {
       socket.on('leaveSession', (payload: { sessionId: string }) => {
         console.log(`Received leaveSession from ${socketId}:`, payload);
         try {
-          this.pokerService.leaveSession(payload.sessionId, socketId);
-          socket.leave(payload.sessionId);
-          // Send confirmation to the user
-          socket.emit('sessionLeft', { sessionId: payload.sessionId });
+          const success = this.pokerService.leaveSession(payload.sessionId, socketId);
+          if (success) {
+            socket.emit('sessionLeft', { sessionId: payload.sessionId });
+          } else {
+            socket.emit('error', { message: 'Failed to leave session: Invalid session' });
+          }
         } catch (error: any) {
-          console.error(`Error leaving session ${payload.sessionId} by ${socketId}:`, error);
+          console.error(`Error leaving session ${payload.sessionId}:`, error);
           socket.emit('error', { message: 'Failed to leave session: ' + error.message });
         }
       });
@@ -265,12 +299,105 @@ class WebSocketService {
       });
 
       /**
+       * Handles host transfer requests
+       * Allows the current host to transfer host role to another user
+       */
+      socket.on('transferHost', (payload: { sessionId: string, newHostId: string }) => {
+        console.log(`Received transferHost from ${socketId}:`, payload);
+        try {
+          const updatedSession = this.pokerService.transferHost(payload.sessionId, socketId, payload.newHostId);
+          if (updatedSession) {
+            // The broadcast is handled by the pokerService
+            console.log(`Host role transferred successfully in session ${payload.sessionId}`);
+          } else {
+            socket.emit('error', { message: 'Failed to transfer host role: Invalid session or not host' });
+          }
+        } catch (error: any) {
+          console.error(`Error transferring host role for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to transfer host role: ' + error.message });
+        }
+      });
+
+      /**
+       * Handles instant ticket addition to an existing session
+       * Allows the host to add a ticket on-demand during the session
+       */
+      socket.on('addTicketToSession', async (payload: { sessionId: string, ticketKey: string }) => {
+        console.log(`Received addTicketToSession from ${socketId}:`, payload);
+        try {
+          const updatedSession = await this.pokerService.addTicketToSession(payload.sessionId, socketId, payload.ticketKey);
+          if (updatedSession) {
+            console.log(`Ticket ${payload.ticketKey} added to session ${payload.sessionId} successfully`);
+            // The broadcast is handled by the pokerService's addTicketToSession method
+          } else {
+            socket.emit('error', { message: 'Failed to add ticket: Invalid session or not host' });
+          }
+        } catch (error: any) {
+          console.error(`Error adding ticket ${payload.ticketKey} to session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to add ticket: ' + error.message });
+        }
+      });
+
+      /**
+       * Handles setting final estimation for a ticket
+       * Allows the host to set the agreed-upon estimation value after discussion
+       */
+      socket.on('setFinalEstimation', (payload: { sessionId: string, ticketKey: string, estimationValue: string }) => {
+        console.log(`Received setFinalEstimation from ${socketId}:`, payload);
+        try {
+          const updatedSession = this.pokerService.setFinalEstimation(payload.sessionId, socketId, payload.ticketKey, payload.estimationValue);
+          if (updatedSession) {
+            console.log(`Final estimation set for ticket ${payload.ticketKey} in session ${payload.sessionId}: ${payload.estimationValue}`);
+            // The broadcast is handled by the pokerService's setFinalEstimation method
+          } else {
+            socket.emit('error', { message: 'Failed to set final estimation: Invalid session or not host' });
+          }
+        } catch (error: any) {
+          console.error(`Error setting final estimation for ticket ${payload.ticketKey} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to set final estimation: ' + error.message });
+        }
+      });
+
+      /**
+       * Handles restarting voting for the current ticket
+       * Allows the host to restart voting during discussion phase
+       */
+      socket.on('restartVoting', (payload: HostActionPayload) => {
+        console.log(`Received restartVoting from ${socketId}:`, payload);
+        try {
+          const updatedSession = this.pokerService.restartVoting(payload.sessionId, socketId);
+          if (updatedSession) {
+            console.log(`Voting restarted for session ${payload.sessionId}`);
+            // The broadcast is handled by the pokerService's restartVoting method
+          } else {
+            socket.emit('error', { message: 'Failed to restart voting: Invalid session or not host' });
+          }
+        } catch (error: any) {
+          console.error(`Error restarting voting for ${socketId} in session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to restart voting: ' + error.message });
+        }
+      });
+
+      /**
        * Handles client disconnection
        * Cleans up resources and notifies the planning poker service
        */
       socket.on('disconnect', () => {
         console.log(`User disconnected with socket ID: ${socketId}`);
         this.pokerService.handleDisconnect(socketId); // Notify pokerService
+      });
+
+      socket.on('closeSession', (payload: { sessionId: string }) => {
+        console.log(`Received closeSession from ${socketId}:`, payload);
+        try {
+          const success = this.pokerService.closeSession(payload.sessionId, socketId);
+          if (!success) {
+            socket.emit('error', { message: 'Failed to close session: Not authorized or invalid session' });
+          }
+        } catch (error: any) {
+          console.error(`Error closing session ${payload.sessionId}:`, error);
+          socket.emit('error', { message: 'Failed to close session: ' + error.message });
+        }
       });
     });
   }
@@ -284,7 +411,10 @@ class WebSocketService {
    * @param data - The data to send
    */
   public sendToSocket(socketId: string, event: string, data: any): void {
-    this.io.to(socketId).emit(event, data);
+    const socket = this.io.sockets.sockets.get(socketId);
+    if (socket) {
+      socket.emit(event, data);
+    }
   }
 
   /**
@@ -328,30 +458,44 @@ class WebSocketService {
   }
 
   /**
-   * Broadcasts the updated global PBR queue to all connected clients.
-   * This method is called by PlanningPokerService after the queue is modified.
-   * @param queue - The updated global PBR queue.
+   * Broadcasts the global PBR queue to all connected clients
    */
-  public broadcastGlobalPbrQueueUpdate(queue: JiraTicket[]): void {
-    console.log('Broadcasting server.pbrQueue.updated to all clients.');
-    this.io.emit('server.pbrQueue.updated', queue);
+  public async broadcastGlobalPbrQueueUpdate(queue: JiraTicket[]): Promise<void> {
+    try {
+      const clients = await this.io.fetchSockets();
+      if (clients.length > 0) {
+        this.io.emit('server.pbrQueue.updated', queue);
+        console.log(`Broadcasting server.pbrQueue.updated to ${clients.length} clients.`);
+      } else {
+        console.warn('No clients connected, skipping broadcast of server.pbrQueue.updated.');
+      }
+    } catch (err) {
+      console.error('Error broadcasting queue update:', err);
+    }
   }
 
-  public handleAddTicketsToGlobalQueue(socket: Socket, tickets: JiraTicket[]): void {
+  public async handleAddTicketsToGlobalQueue(socket: Socket, tickets: JiraTicket[]): Promise<void> {
     try {
       console.log('[WebSocketService] Adding tickets to global PBR queue:', tickets);
-      this.pokerService.addTicketsToGlobalPbrQueue(tickets)
-        .then(updatedQueue => {
-          console.log('[WebSocketService] Queue updated successfully:', updatedQueue);
-        })
-        .catch(error => {
-          console.error('[WebSocketService] Error adding tickets to queue:', error);
-          socket.emit('error', { message: 'Failed to add tickets to queue' });
-        });
+      const updatedQueue = await this.pokerService.addTicketsToGlobalPbrQueue(tickets);
+      console.log('[WebSocketService] Queue updated successfully:', updatedQueue);
+      await this.broadcastGlobalPbrQueueUpdate(updatedQueue);
+      socket.emit('queueUpdate', updatedQueue); // Send immediate confirmation to the sender
     } catch (error) {
       console.error('[WebSocketService] Error in handleAddTicketsToGlobalQueue:', error);
       socket.emit('error', { message: 'Failed to add tickets to queue' });
+      throw error; // Re-throw to trigger the error callback in the client
     }
+  }
+
+  public broadcastToSession(sessionId: string, event: string, data: any): void {
+    // Get all socket IDs in the session
+    const session = this.pokerService.getSession(sessionId);
+    if (!session) return;
+
+    session.users.forEach(user => {
+      this.sendToSocket(user.id, event, data);
+    });
   }
 }
 

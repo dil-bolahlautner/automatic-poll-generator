@@ -24,6 +24,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import axios from 'axios';
+import { getAuthHeaders } from '../utils/authUtils';
 
 /**
  * Interface representing a JIRA ticket structure
@@ -56,6 +57,8 @@ export function TeamsPollGenerator() {
       await axios.post('http://localhost:3001/api/teams/generate-polls', {
         meetingId,
         tickets,
+      }, {
+        headers: getAuthHeaders()
       });
     } catch (error) {
       console.error('Error generating Teams polls:', error);
